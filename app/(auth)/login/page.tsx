@@ -60,16 +60,13 @@ export default function LoginPage() {
         return
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session) {
-        setError('Login succeeded, but the browser session was not saved.')
+      if (!data.session) {
+        setError('Login succeeded, but no browser session was returned.')
         return
       }
 
-      const destination = '/debug-auth'
+      const role = data.user.user_metadata?.role
+      const destination = role === 'therapist' ? '/patients' : '/dashboard'
 
       router.refresh()
       window.location.href = destination
