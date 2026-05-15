@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
@@ -34,7 +33,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +48,7 @@ export default function LoginPage() {
     setError(null)
     setRedirectError(null)
     setLoading(true)
+    let navigationStarted = false
 
     try {
       const supabase = createClient()
@@ -73,27 +72,37 @@ export default function LoginPage() {
       })
 
       if (error) {
+        console.error('Login failed:', error)
         setError(error.message)
         return
       }
 
       if (!data?.user) {
-        setError('Login succeeded but no user session was returned.')
+        const message = 'Login succeeded but no user session was returned.'
+        console.error('Login failed:', message)
+        setError(message)
         return
       }
 
       if (!data.session) {
-        setError('Login succeeded, but no browser session was returned.')
+        const message = 'Login succeeded, but no browser session was returned.'
+        console.error('Login failed:', message)
+        setError(message)
         return
       }
 
-      router.refresh()
-      window.location.href = '/debug-auth'
+      const role = data.user.user_metadata?.role
+      const destination = role === 'therapist' ? '/patients' : '/dashboard'
+
+      navigationStarted = true
+      window.location.assign(destination)
     } catch (err) {
       console.error('Login failed:', err)
       setError(err instanceof Error ? err.message : 'Unexpected login error')
     } finally {
-      setLoading(false)
+      if (!navigationStarted) {
+        setLoading(false)
+      }
     }
   }
 
