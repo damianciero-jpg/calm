@@ -61,25 +61,27 @@ export default function DashboardPage() {
 
       try {
         const {
-          data: { user },
-          error: userError,
-        } = await withTimeout(supabase.auth.getUser(), 'Dashboard user lookup')
+          data: { session },
+          error: sessionError,
+        } = await withTimeout(supabase.auth.getSession(), 'Dashboard session lookup')
 
-        if (userError) {
-          console.error('Dashboard getUser error', userError)
-          addDiagnostic(`Auth user error: ${userError.message}`)
-          if (active) setDashboardError(userError.message)
+        if (sessionError) {
+          console.error('Dashboard getSession error', sessionError)
+          addDiagnostic(`Auth session error: ${sessionError.message}`)
+          if (active) setDashboardError(sessionError.message)
           return
         }
 
-        if (!user) {
-          console.error('Dashboard auth lookup returned no user; redirecting to login')
+        if (!session) {
+          console.error('Dashboard session lookup returned no session; redirecting to login')
           navigationStarted = true
           window.location.assign('/login')
           return
         }
 
-        addDiagnostic('Auth user found')
+        const user = session.user
+
+        addDiagnostic('Auth session found')
         addDiagnostic('Children query started')
         childrenQueryStarted = true
 
@@ -139,6 +141,7 @@ export default function DashboardPage() {
       await supabase.auth.signOut()
     } finally {
       localStorage.clear()
+      sessionStorage.clear()
       window.location.href = '/login'
     }
   }
@@ -184,7 +187,7 @@ export default function DashboardPage() {
               onClick={signOutAndRetry}
               style={{ marginTop: '1rem', marginLeft: '0.75rem', padding: '10px 14px', background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
             >
-              Sign out and retry
+              Clear auth data
             </button>
           </div>
         </div>
