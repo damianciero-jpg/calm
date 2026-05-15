@@ -14,6 +14,20 @@ const MOOD_META = {
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SUPABASE_TIMEOUT_MS = 10000;
+
+function withTimeout(promise, label) {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds`));
+    }, SUPABASE_TIMEOUT_MS);
+
+    Promise.resolve(promise)
+      .then(resolve)
+      .catch(reject)
+      .finally(() => window.clearTimeout(timeout));
+  });
+}
 
 function moodScore(mood) {
   return { happy: 5, calm: 4, tired: 3, sad: 2, anxious: 2, angry: 1 }[mood] ?? 3;
@@ -159,26 +173,55 @@ export default function CalmPathDashboard({
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState(null);
   const [aiInsights, setAiInsights] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
 
   useEffect(() => {
-    if (!childId) { setSessionsLoading(false); return; }
+    let active = true;
+    if (!childId) { setSessionsLoading(false); return () => { active = false; }; }
+
     const supabase = createClient();
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    supabase
-      .from("sessions")
-      .select("*")
-      .eq("child_id", childId)
-      .gte("played_at", weekAgo.toISOString())
-      .order("played_at", { ascending: true })
-      .then(({ data }) => {
-        if (data) setSessions(data.map(dbRowToSession));
-        setSessionsLoading(false);
-      });
+
+    async function loadSessions() {
+      setSessionsLoading(true);
+      setSessionsError(null);
+
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from("sessions")
+            .select("*")
+            .eq("child_id", childId)
+            .gte("played_at", weekAgo.toISOString())
+            .order("played_at", { ascending: true }),
+          "Dashboard sessions query"
+        );
+
+        if (error) {
+          console.error("Dashboard sessions query error", error);
+          if (active) setSessionsError(`Dashboard sessions query error: ${error.message}`);
+          return;
+        }
+
+        if (active) setSessions((data ?? []).map(dbRowToSession));
+      } catch (err) {
+        console.error("Dashboard sessions query failed", err);
+        if (active) setSessionsError(err instanceof Error ? err.message : "Unexpected sessions loading error");
+      } finally {
+        if (active) setSessionsLoading(false);
+      }
+    }
+
+    loadSessions();
+
+    return () => {
+      active = false;
+    };
   }, [childId]);
 
   const chartData     = buildChartData(sessions);
@@ -329,6 +372,11 @@ export default function CalmPathDashboard({
 
         {/* CONTENT */}
         <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem" }}>
+          {sessionsError && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "14px", padding: "1rem 1.25rem", color: "#DC2626", fontSize: "0.9rem", lineHeight: 1.45, marginBottom: "1rem" }}>
+              {sessionsError}
+            </div>
+          )}
 
           {/* ── OVERVIEW TAB ── */}
           {tab === "overview" && (

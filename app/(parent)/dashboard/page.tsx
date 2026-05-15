@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
   const [showAddChild, setShowAddChild]   = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
+  const [isEmpty, setIsEmpty] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -47,6 +48,8 @@ export default function DashboardPage() {
           error: userError,
         } = await withTimeout(supabase.auth.getUser(), 'Dashboard user lookup')
 
+        let authUser = user
+
         if (userError) {
           console.error('Dashboard getUser error', userError)
           if (active) setDashboardError(`Dashboard getUser error: ${userError.message}`)
@@ -54,18 +57,42 @@ export default function DashboardPage() {
         }
 
         if (!user) {
-          console.error('Dashboard user missing; redirecting to login')
+          const {
+            data: { session },
+            error: sessionError,
+          } = await withTimeout(supabase.auth.getSession(), 'Dashboard session fallback lookup')
+
+          if (sessionError) {
+            console.error('Dashboard getSession error', sessionError)
+            if (active) setDashboardError(`Dashboard getSession error: ${sessionError.message}`)
+            return
+          }
+
+          if (!session?.user) {
+            console.error('Dashboard auth lookup returned no user; redirecting to login')
+            if (active) setLoading(false)
+            router.replace('/login')
+            return
+          }
+
+          authUser = session.user
+        }
+
+        if (!authUser) {
+          console.error('Dashboard auth lookup returned no user after fallback; redirecting to login')
           if (active) setLoading(false)
           router.replace('/login')
           return
         }
+
+        const userId = authUser.id
 
         const { data, error: childrenError } = await withTimeout(
           Promise.resolve(
             supabase
               .from('children')
               .select('*')
-              .eq('parent_id', user.id)
+              .eq('parent_id', userId)
               .order('created_at')
           ),
           'Dashboard children query'
@@ -82,6 +109,7 @@ export default function DashboardPage() {
         if (active) {
           setChildren(kids)
           setSelectedChild(kids[0] ?? null)
+          setIsEmpty(kids.length === 0)
         }
       } catch (err) {
         console.error('Dashboard load failed', err)
@@ -103,14 +131,17 @@ export default function DashboardPage() {
   function handleAddSuccess(child: Child) {
     setChildren(prev => [...prev, child])
     setSelectedChild(child)
+    setIsEmpty(false)
     setShowAddChild(false)
   }
 
   if (loading) return (
     <>
-      <style>{`@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}`}</style>
-      <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '2rem', animation: 'bounce 1.2s ease-in-out infinite' }}>📊</div>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
+      <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
+        <div style={{ color: '#64748B', fontSize: '0.95rem' }}>
+          Loading dashboard...
+        </div>
       </div>
     </>
   )
@@ -140,8 +171,27 @@ export default function DashboardPage() {
     )
   }
 
-  if (!selectedChild) {
-    return <AddChildModal onSuccess={handleAddSuccess} />
+  if (isEmpty || !selectedChild) {
+    return (
+      <>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
+        <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '460px', background: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 4px 24px rgba(15,23,42,0.08)', textAlign: 'center' }}>
+            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.35rem', color: '#0F172A', marginBottom: '0.5rem' }}>
+              No child profile found. Create your first child profile.
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddChild(true)}
+              style={{ marginTop: '1rem', padding: '10px 14px', background: '#6366F1', color: 'white', border: 'none', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
+            >
+              Set up your first child
+            </button>
+          </div>
+        </div>
+        {showAddChild && <AddChildModal onSuccess={handleAddSuccess} onCancel={() => setShowAddChild(false)} />}
+      </>
+    )
   }
 
   return (
