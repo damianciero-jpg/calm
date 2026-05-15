@@ -31,7 +31,12 @@ export async function proxy(request: NextRequest) {
 
   if (!user && !isAuthPage && !isAuthCallback) {
     const url = request.nextUrl.clone()
+    const from = `${pathname}${request.nextUrl.search}`
     url.pathname = '/login'
+    url.search = ''
+    url.searchParams.set('error', 'missing_session')
+    url.searchParams.set('from', from)
+    url.searchParams.set('source', 'proxy')
     return NextResponse.redirect(url)
   }
 

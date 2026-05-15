@@ -21,7 +21,10 @@ export default function DashboardPage() {
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { router.push('/login'); return }
+      if (!session) {
+        router.push('/login?error=missing_session&from=%2Fdashboard&source=dashboard')
+        return
+      }
       supabase
         .from('children')
         .select('*')

@@ -1,57 +1,82 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+
+function getRedirectErrorMessage(search: string) {
+  const params = new URLSearchParams(search)
+  const error = params.get('error')
+  const from = params.get('from')
+  const source = params.get('source')
+  const fromPath = from?.split('?')[0]
+
+  if (error === 'missing_session' && (fromPath === '/dashboard' || fromPath === '/patients')) {
+    const sender = source === 'proxy' ? 'server proxy' : 'client session check'
+    return `Redirected back from ${from}: the ${sender} could not find a Supabase session cookie. Sign in again; if this repeats, check that Supabase auth cookies are being saved for this domain.`
+  }
+
+  if (error === 'auth_callback_failed') {
+    return 'Authentication callback failed. Please try signing in again.'
+  }
+
+  return null
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [redirectError, setRedirectError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setRedirectError(getRedirectErrorMessage(window.location.search))
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setRedirectError(null)
     setLoading(true)
 
-    const supabase = createClient()
-
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      const supabase = createClient()
 
-      if (signInError) {
-        console.error('signInWithPassword failed', signInError)
-        setError(signInError.message)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        setError(error.message)
         return
       }
 
-      const metadataRole = data.user?.user_metadata?.role
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single()
-
-      if (profileError) {
-        console.error('Failed to load profile after sign in', profileError)
+      if (!data?.user) {
+        setError('Login succeeded but no user session was returned.')
+        return
       }
 
-      const role = profile?.role ?? metadataRole
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session) {
+        setError('Login succeeded, but the browser session was not saved.')
+        return
+      }
+
+      const role = data.user.user_metadata?.role
       const destination = role === 'therapist' ? '/patients' : '/dashboard'
 
-      try {
-        router.replace(destination)
-        router.refresh()
-      } catch (navigationError) {
-        console.error(`Navigation to ${destination} failed`, navigationError)
-        setError('Signed in, but we could not open your dashboard. Please try again.')
-      }
-    } catch (unexpectedError) {
-      console.error('Unexpected login failure', unexpectedError)
-      setError('Unable to sign in right now. Please try again.')
+      router.refresh()
+      window.location.href = destination
+    } catch (err) {
+      console.error('Login failed:', err)
+      setError(err instanceof Error ? err.message : 'Unexpected login error')
     } finally {
       setLoading(false)
     }
@@ -119,6 +144,12 @@ export default function LoginPage() {
               {error && (
                 <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#DC2626' }}>
                   {error}
+                </div>
+              )}
+
+              {redirectError && (
+                <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#C2410C', lineHeight: 1.45 }}>
+                  {redirectError}
                 </div>
               )}
 
