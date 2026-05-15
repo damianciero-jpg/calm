@@ -185,7 +185,7 @@ export default function DashboardPage() {
               onClick={() => setShowAddChild(true)}
               style={{ marginTop: '1rem', padding: '10px 14px', background: '#6366F1', color: 'white', border: 'none', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
             >
-              Set up your first child
+              Add child profile
             </button>
           </div>
         </div>
@@ -223,7 +223,7 @@ export default function DashboardPage() {
             flexShrink: 0, marginLeft: 'auto',
           }}
         >
-          + Add Child
+          Add child profile
         </button>
       </div>
 

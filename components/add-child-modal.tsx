@@ -50,16 +50,48 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
     e.preventDefault()
     setSaving(true)
     setError(null)
-    const supabase = createClient()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setError('Session expired — please refresh.'); setSaving(false); return }
-    const { data, error: err } = await supabase
-      .from('children')
-      .insert({ parent_id: session.user.id, name: name.trim(), age: parseInt(age, 10), avatar: selected.emoji, color: selected.color })
-      .select()
-      .single()
-    if (err) { setError(err.message); setSaving(false); return }
-    onSuccess(data as Child)
+
+    try {
+      const supabase = createClient()
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+      if (userError) {
+        console.error('Add child getUser failed', userError)
+        setError(userError.message)
+        return
+      }
+
+      if (!user) {
+        setError('Session expired. Please sign in again.')
+        return
+      }
+
+      const { data, error: err } = await supabase
+        .from('children')
+        .insert({
+          parent_id: user.id,
+          name: name.trim(),
+          age: parseInt(age, 10),
+          avatar: selected.emoji,
+          color: selected.color,
+          game_mode: 'kids',
+        })
+        .select()
+        .single()
+
+      if (err) {
+        console.error('Add child insert failed', err)
+        setError(err.message)
+        return
+      }
+
+      onSuccess(data as Child)
+    } catch (err) {
+      console.error('Add child failed', err)
+      setError(err instanceof Error ? err.message : 'Unexpected child profile error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const card = (

@@ -5,12 +5,24 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
+const CHILD_AVATARS = [
+  { emoji: 'ðŸ˜„', color: '#FFD93D' },
+  { emoji: 'ðŸ˜Œ', color: '#6BCB77' },
+  { emoji: 'ðŸ˜Ÿ', color: '#74B9FF' },
+  { emoji: 'ðŸ˜ ', color: '#FF6B6B' },
+  { emoji: 'ðŸ˜¢', color: '#A29BFE' },
+  { emoji: 'ðŸ˜´', color: '#FDCB6E' },
+]
+
 export default function SignupPage() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'parent' | 'therapist'>('parent')
+  const [childName, setChildName] = useState('')
+  const [childAge, setChildAge] = useState('')
+  const [selectedAvatar, setSelectedAvatar] = useState(CHILD_AVATARS[0])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
@@ -18,6 +30,19 @@ export default function SignupPage() {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+
+    if (role === 'parent') {
+      if (!childName.trim()) {
+        setError('Child name is required for parent accounts.')
+        return
+      }
+
+      if (!childAge || Number.isNaN(Number(childAge))) {
+        setError('Child age is required for parent accounts.')
+        return
+      }
+    }
+
     setLoading(true)
 
     const supabase = createClient()
@@ -26,7 +51,18 @@ export default function SignupPage() {
       email,
       password,
       options: {
-        data: { full_name: fullName, role },
+        data: {
+          full_name: fullName,
+          role,
+          ...(role === 'parent'
+            ? {
+                child_name: childName.trim(),
+                child_age: Number(childAge),
+                child_avatar: selectedAvatar.emoji,
+                child_color: selectedAvatar.color,
+              }
+            : {}),
+        },
         emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
       },
     })
@@ -40,6 +76,24 @@ export default function SignupPage() {
     // Profile row is auto-created by DB trigger (handle_new_user) on auth.users INSERT
     // If email confirmation is disabled in Supabase, user is already logged in
     if (data.session) {
+      if (role === 'parent' && data.user) {
+        const { error: childError } = await supabase.from('children').insert({
+          parent_id: data.user.id,
+          name: childName.trim(),
+          age: Number(childAge),
+          avatar: selectedAvatar.emoji,
+          color: selectedAvatar.color,
+          game_mode: 'kids',
+        })
+
+        if (childError) {
+          console.error('Signup child profile insert failed', childError)
+          setError(`Account created, but child profile creation failed: ${childError.message}`)
+          setLoading(false)
+          return
+        }
+      }
+
       router.refresh()
       router.push(role === 'therapist' ? '/patients' : '/dashboard')
     } else {
@@ -160,6 +214,59 @@ export default function SignupPage() {
                   autoComplete="new-password"
                 />
               </div>
+
+              {role === 'parent' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', borderTop: '1px solid #E2E8F0', paddingTop: '14px' }}>
+                  <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.05rem', color: '#0F172A' }}>Child profile</div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>Child name</label>
+                    <input
+                      className="auth-input"
+                      type="text"
+                      placeholder="e.g. Alex"
+                      value={childName}
+                      onChange={e => setChildName(e.target.value)}
+                      required={role === 'parent'}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>Child age</label>
+                    <input
+                      className="auth-input"
+                      type="number"
+                      min={1}
+                      max={18}
+                      placeholder="e.g. 8"
+                      value={childAge}
+                      onChange={e => setChildAge(e.target.value)}
+                      required={role === 'parent'}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>Child avatar</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {CHILD_AVATARS.map(avatar => (
+                        <button
+                          key={avatar.emoji}
+                          type="button"
+                          onClick={() => setSelectedAvatar(avatar)}
+                          style={{
+                            flex: 1, padding: '10px 0', borderRadius: '10px', cursor: 'pointer',
+                            border: `2px solid ${selectedAvatar.emoji === avatar.emoji ? avatar.color : '#E2E8F0'}`,
+                            background: selectedAvatar.emoji === avatar.emoji ? `${avatar.color}22` : 'white',
+                            fontSize: '1.3rem', transition: 'all 0.12s',
+                          }}
+                        >
+                          {avatar.emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#DC2626' }}>

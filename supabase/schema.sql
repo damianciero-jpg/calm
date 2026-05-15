@@ -87,9 +87,20 @@ CREATE POLICY "profiles_update_own" ON public.profiles
 
 -- children
 DROP POLICY IF EXISTS "children_parent_all"       ON public.children;
+DROP POLICY IF EXISTS "children_parent_select"    ON public.children;
+DROP POLICY IF EXISTS "children_parent_insert"    ON public.children;
+DROP POLICY IF EXISTS "children_parent_update"    ON public.children;
+DROP POLICY IF EXISTS "children_parent_delete"    ON public.children;
 DROP POLICY IF EXISTS "children_therapist_select"  ON public.children;
-CREATE POLICY "children_parent_all" ON public.children
-  FOR ALL USING (auth.uid() = parent_id);
+CREATE POLICY "children_parent_select" ON public.children
+  FOR SELECT USING (auth.uid() = parent_id);
+CREATE POLICY "children_parent_insert" ON public.children
+  FOR INSERT WITH CHECK (auth.uid() = parent_id);
+CREATE POLICY "children_parent_update" ON public.children
+  FOR UPDATE USING (auth.uid() = parent_id)
+  WITH CHECK (auth.uid() = parent_id);
+CREATE POLICY "children_parent_delete" ON public.children
+  FOR DELETE USING (auth.uid() = parent_id);
 CREATE POLICY "children_therapist_select" ON public.children
   FOR SELECT USING (auth.uid() = therapist_id);
 

@@ -53,7 +53,7 @@ export default function SettingsPage() {
 
       const [profileRes, childrenRes] = await Promise.all([
         supabase.from('profiles').select('id, full_name, role').eq('id', session.user.id).single(),
-        supabase.from('children').select('*').order('created_at'),
+        supabase.from('children').select('*').eq('parent_id', session.user.id).order('created_at'),
       ])
 
       if (profileRes.data) {
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                     fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.15s',
                   }}
                 >
-                  + Add child
+                  Add child profile
                 </button>
               </div>
             </Section>
