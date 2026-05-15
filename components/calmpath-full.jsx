@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { getBrowserSession } from "@/lib/browser-auth";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis } from "recharts";
 
 const MOOD_META = {
@@ -238,8 +239,9 @@ export default function CalmPathApp() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setChildrenLoading(false); return; }
+      const session = await getBrowserSession("Therapist dashboard session lookup");
+      if (!session) { setChildrenLoading(false); return; }
+      const user = session.user;
 
       setTherapistName(user.user_metadata?.full_name ?? "Therapist");
 

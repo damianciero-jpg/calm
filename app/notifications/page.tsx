@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
 
 interface Notification {
   id:         string
@@ -36,25 +36,47 @@ function timeAgo(iso: string) {
 }
 
 export default function NotificationsPage() {
-  const router = useRouter()
   const [loading, setLoading]             = useState(true)
+  const [authMissing, setAuthMissing]     = useState(false)
   const [notifs,  setNotifs]              = useState<Notification[]>([])
   const [marking, setMarking]             = useState<string | null>(null)
 
   useEffect(() => {
+    let active = true
     const supabase = createClient()
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { router.push('/login'); return }
-      const { data } = await supabase
-        .from('notifications')
-        .select('id, type, title, body, read, created_at, child:children(name, avatar, color)')
-        .eq('recipient_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-      setNotifs((data ?? []) as unknown as Notification[])
-      setLoading(false)
-    })
-  }, [router])
+
+    async function loadNotifications() {
+      try {
+        const session = await getBrowserSession('Notifications session lookup')
+        if (!active) return
+
+        if (!session) {
+          setAuthMissing(true)
+          return
+        }
+
+        const { data } = await supabase
+          .from('notifications')
+          .select('id, type, title, body, read, created_at, child:children(name, avatar, color)')
+          .eq('recipient_id', session.user.id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        if (active) setNotifs((data ?? []) as unknown as Notification[])
+      } catch (err) {
+        console.error('Notifications load failed', err)
+        if (active) setAuthMissing(true)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadNotifications()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   async function markRead(id: string) {
     setMarking(id)
@@ -73,6 +95,10 @@ export default function NotificationsPage() {
   }
 
   const unreadCount = notifs.filter(n => !n.read).length
+
+  if (authMissing) {
+    return <SignInRequired />
+  }
 
   return (
     <>

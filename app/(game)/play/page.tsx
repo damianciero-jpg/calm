@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
 import MoodQuest from '@/components/moodquest.jsx'
 import type { Child } from '@/types/database'
 
@@ -19,42 +20,69 @@ function PlayPageContent() {
   const searchParams = useSearchParams()
   const childIdParam = searchParams.get('childId')
   const [loading, setLoading]             = useState(true)
+  const [authMissing, setAuthMissing]     = useState(false)
   const [children, setChildren]           = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
 
   useEffect(() => {
+    let active = true
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { router.push('/login'); return }
-      supabase
-        .from('children')
-        .select('*')
-        .order('created_at')
-        .then(({ data }) => {
-          const kids = (data ?? []) as Child[]
-          setChildren(kids)
-          if (childIdParam) {
-            const match = kids.find(k => k.id === childIdParam)
-            if (match) {
-              if ((match.game_mode ?? 'kids') === 'teen') {
-                router.replace(`/play-teen?childId=${match.id}`); return
-              }
-              setSelectedChild(match); setLoading(false); return
+
+    async function loadPlay() {
+      try {
+        const session = await getBrowserSession('Play session lookup')
+        if (!active) return
+
+        if (!session) {
+          setAuthMissing(true)
+          return
+        }
+
+        const { data } = await supabase
+          .from('children')
+          .select('*')
+          .order('created_at')
+
+        if (!active) return
+
+        const kids = (data ?? []) as Child[]
+        setChildren(kids)
+        if (childIdParam) {
+          const match = kids.find(k => k.id === childIdParam)
+          if (match) {
+            if ((match.game_mode ?? 'kids') === 'teen') {
+              router.replace(`/play-teen?childId=${match.id}`)
+              return
             }
+            setSelectedChild(match)
+            return
           }
-          if (kids.length === 1) {
-            const only = kids[0]
-            if ((only.game_mode ?? 'kids') === 'teen') {
-              router.replace(`/play-teen?childId=${only.id}`); return
-            }
-            setSelectedChild(only)
+        }
+        if (kids.length === 1) {
+          const only = kids[0]
+          if ((only.game_mode ?? 'kids') === 'teen') {
+            router.replace(`/play-teen?childId=${only.id}`)
+            return
           }
-          setLoading(false)
-        })
-    })
+          setSelectedChild(only)
+        }
+      } catch (err) {
+        console.error('Play load failed', err)
+        if (active) setAuthMissing(true)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadPlay()
+
+    return () => {
+      active = false
+    }
   }, [router, childIdParam])
 
   if (loading)       return <FullPageLoader />
+  if (authMissing)   return <SignInRequired />
   if (selectedChild) return <MoodQuest childId={selectedChild.id} />
   return <ChildSelector children={children} onSelect={setSelectedChild} />
 }

@@ -8,12 +8,10 @@ function getRedirectErrorMessage(search: string) {
   const params = new URLSearchParams(search)
   const error = params.get('error')
   const from = params.get('from')
-  const source = params.get('source')
   const fromPath = from?.split('?')[0]
 
   if (error === 'missing_session' && (fromPath === '/dashboard' || fromPath === '/patients')) {
-    const sender = source === 'proxy' ? 'server proxy' : 'client session check'
-    return `Redirected back from ${from}: the ${sender} could not find a Supabase session cookie. Sign in again; if this repeats, check that Supabase auth cookies are being saved for this domain.`
+    return `Sign in again to continue to ${from}. If this repeats, check that Supabase auth cookies are being saved for this domain.`
   }
 
   if (error === 'auth_callback_failed') {
@@ -91,11 +89,8 @@ export default function LoginPage() {
         return
       }
 
-      const role = data.user.user_metadata?.role
-      const destination = role === 'therapist' ? '/patients' : '/dashboard'
-
       navigationStarted = true
-      window.location.assign(destination)
+      window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
       setError(err instanceof Error ? err.message : 'Unexpected login error')

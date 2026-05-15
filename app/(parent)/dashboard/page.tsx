@@ -3,22 +3,13 @@
 import { useEffect, useState } from 'react'
 import type React from 'react'
 import { createClient } from '@/lib/supabase'
+import { SignInRequired, withTimeout } from '@/lib/browser-auth'
 import CalmPathDashboardRaw from '@/components/calmpath-dashboard'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
 type DashboardProps = { childId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
 const CalmPathDashboard = CalmPathDashboardRaw as unknown as React.ComponentType<DashboardProps>
-const SUPABASE_TIMEOUT_MS = 10_000
-
-function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds`)), SUPABASE_TIMEOUT_MS)
-    ),
-  ])
-}
 
 function Diagnostics({ diagnostics }: { diagnostics: string[] }) {
   return (
@@ -38,12 +29,12 @@ export default function DashboardPage() {
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
   const [showAddChild, setShowAddChild]   = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
+  const [authMissing, setAuthMissing] = useState(false)
   const [isEmpty, setIsEmpty] = useState(false)
   const [diagnostics, setDiagnostics] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
-    let navigationStarted = false
     let childrenQueryStarted = false
     const supabase = createClient()
 
@@ -56,6 +47,7 @@ export default function DashboardPage() {
     async function loadDashboard() {
       setLoading(true)
       setDashboardError(null)
+      setAuthMissing(false)
       setIsEmpty(false)
       setDiagnostics([])
 
@@ -73,9 +65,8 @@ export default function DashboardPage() {
         }
 
         if (!session) {
-          console.error('Dashboard session lookup returned no session; redirecting to login')
-          navigationStarted = true
-          window.location.assign('/login')
+          console.error('Dashboard session lookup returned no session')
+          if (active) setAuthMissing(true)
           return
         }
 
@@ -116,7 +107,7 @@ export default function DashboardPage() {
           setDashboardError(err instanceof Error ? err.message : 'Unexpected dashboard loading error')
         }
       } finally {
-        if (active && !navigationStarted) setLoading(false)
+        if (active) setLoading(false)
       }
     }
 
@@ -159,6 +150,10 @@ export default function DashboardPage() {
       </div>
     </>
   )
+
+  if (authMissing) {
+    return <SignInRequired />
+  }
 
   if (dashboardError) {
     return (

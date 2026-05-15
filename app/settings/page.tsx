@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
@@ -32,6 +33,7 @@ export default function SettingsPage() {
   const router = useRouter()
 
   const [loading,      setLoading]      = useState(true)
+  const [authMissing,  setAuthMissing]  = useState(false)
   const [profile,      setProfile]      = useState<Profile | null>(null)
   const [email,        setEmail]        = useState('')
   const [displayName,  setDisplayName]  = useState('')
@@ -45,33 +47,55 @@ export default function SettingsPage() {
   const [signingOut,   setSigningOut]   = useState(false)
 
   useEffect(() => {
+    let active = true
     const supabase = createClient()
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { router.push('/login'); return }
 
-      setEmail(session.user.email ?? '')
+    async function loadSettings() {
+      try {
+        const session = await getBrowserSession('Settings session lookup')
+        if (!active) return
 
-      const [profileRes, childrenRes] = await Promise.all([
-        supabase.from('profiles').select('id, full_name, role').eq('id', session.user.id).single(),
-        supabase.from('children').select('*').eq('parent_id', session.user.id).order('created_at'),
-      ])
-
-      if (profileRes.data) {
-        setProfile(profileRes.data as Profile)
-        setDisplayName(profileRes.data.full_name ?? '')
-      }
-
-      if (childrenRes.data) {
-        const kids = childrenRes.data as Child[]
-        setChildren(kids)
-        const modes: Record<string, 'kids' | 'teen'> = {}
-        for (const k of kids) {
-          modes[k.id] = (k.game_mode ?? 'kids') as 'kids' | 'teen'
+        if (!session) {
+          setAuthMissing(true)
+          return
         }
-        setGameModes(modes)
+
+        setEmail(session.user.email ?? '')
+
+        const [profileRes, childrenRes] = await Promise.all([
+          supabase.from('profiles').select('id, full_name, role').eq('id', session.user.id).single(),
+          supabase.from('children').select('*').eq('parent_id', session.user.id).order('created_at'),
+        ])
+
+        if (!active) return
+
+        if (profileRes.data) {
+          setProfile(profileRes.data as Profile)
+          setDisplayName(profileRes.data.full_name ?? '')
+        }
+
+        if (childrenRes.data) {
+          const kids = childrenRes.data as Child[]
+          setChildren(kids)
+          const modes: Record<string, 'kids' | 'teen'> = {}
+          for (const k of kids) {
+            modes[k.id] = (k.game_mode ?? 'kids') as 'kids' | 'teen'
+          }
+          setGameModes(modes)
+        }
+      } catch (err) {
+        console.error('Settings load failed', err)
+        if (active) setAuthMissing(true)
+      } finally {
+        if (active) setLoading(false)
       }
-      setLoading(false)
-    })
+    }
+
+    loadSettings()
+
+    return () => {
+      active = false
+    }
   }, [router])
 
   async function saveName() {
@@ -106,6 +130,10 @@ export default function SettingsPage() {
   if (loading) return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>⚙️</div>
   )
+
+  if (authMissing) {
+    return <SignInRequired />
+  }
 
   return (
     <>
