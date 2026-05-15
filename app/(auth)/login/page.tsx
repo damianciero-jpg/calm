@@ -24,6 +24,15 @@ function getRedirectErrorMessage(search: string) {
   return null
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000} seconds`)), ms)
+    ),
+  ])
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -45,9 +54,22 @@ export default function LoginPage() {
     try {
       const supabase = createClient()
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      console.log('login clicked')
+      console.log('signInWithPassword starting')
+
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        10000,
+        'Supabase login'
+      )
+
+      console.log('signInWithPassword finished', {
+        hasUser: !!data?.user,
+        hasSession: !!data?.session,
+        error,
       })
 
       if (error) {
@@ -65,11 +87,8 @@ export default function LoginPage() {
         return
       }
 
-      const role = data.user.user_metadata?.role
-      const destination = role === 'therapist' ? '/patients' : '/dashboard'
-
       router.refresh()
-      window.location.href = destination
+      window.location.href = '/debug-auth'
     } catch (err) {
       console.error('Login failed:', err)
       setError(err instanceof Error ? err.message : 'Unexpected login error')
