@@ -18,20 +18,42 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (error) {
-      setError(error.message)
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+
+      if (signInError) {
+        console.error('signInWithPassword failed', signInError)
+        setError(signInError.message)
+        return
+      }
+
+      const metadataRole = data.user?.user_metadata?.role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+
+      if (profileError) {
+        console.error('Failed to load profile after sign in', profileError)
+      }
+
+      const role = profile?.role ?? metadataRole
+      const destination = role === 'therapist' ? '/patients' : '/dashboard'
+
+      try {
+        router.replace(destination)
+        router.refresh()
+      } catch (navigationError) {
+        console.error(`Navigation to ${destination} failed`, navigationError)
+        setError('Signed in, but we could not open your dashboard. Please try again.')
+      }
+    } catch (unexpectedError) {
+      console.error('Unexpected login failure', unexpectedError)
+      setError('Unable to sign in right now. Please try again.')
+    } finally {
       setLoading(false)
-      return
-    }
-
-    const role = data.user?.user_metadata?.role
-    router.refresh()
-    if (role === 'therapist') {
-      router.push('/patients')
-    } else {
-      router.push('/dashboard')
     }
   }
 
