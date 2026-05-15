@@ -67,7 +67,7 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
       {isOnboarding ? (
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '8px', transition: 'all 0.15s' }}>{selected.emoji}</div>
-          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.4rem', color: '#0F172A' }}>Add your first child</div>
+          <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.4rem', color: '#0F172A' }}>Set up your first child</div>
           <div style={{ fontSize: '0.82rem', color: '#94A3B8', marginTop: '4px' }}>Set up their profile to start tracking their emotional journey</div>
         </div>
       ) : (

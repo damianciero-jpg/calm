@@ -43,31 +43,37 @@ export default function DashboardPage() {
 
       try {
         const {
-          data: { session },
-          error: sessionError,
-        } = await withTimeout(supabase.auth.getSession(), 'Dashboard session lookup')
+          data: { user },
+          error: userError,
+        } = await withTimeout(supabase.auth.getUser(), 'Dashboard user lookup')
 
-        if (sessionError) {
-          console.error('Dashboard session lookup failed', sessionError)
-          if (active) setDashboardError(`Session error: ${sessionError.message}`)
+        if (userError) {
+          console.error('Dashboard getUser error', userError)
+          if (active) setDashboardError(`Dashboard getUser error: ${userError.message}`)
           return
         }
 
-        if (!session) {
-          console.error('Dashboard session missing; redirecting to login')
+        if (!user) {
+          console.error('Dashboard user missing; redirecting to login')
           if (active) setLoading(false)
           router.replace('/login')
           return
         }
 
         const { data, error: childrenError } = await withTimeout(
-          Promise.resolve(supabase.from('children').select('*').order('created_at')),
+          Promise.resolve(
+            supabase
+              .from('children')
+              .select('*')
+              .eq('parent_id', user.id)
+              .order('created_at')
+          ),
           'Dashboard children query'
         )
 
         if (childrenError) {
-          console.error('Dashboard children query failed', childrenError)
-          if (active) setDashboardError(`Children query error: ${childrenError.message}`)
+          console.error('Dashboard children query error', childrenError)
+          if (active) setDashboardError(`Dashboard children query error: ${childrenError.message}`)
           return
         }
 
