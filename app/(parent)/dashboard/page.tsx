@@ -10,6 +10,20 @@ import type { Child } from '@/types/database'
 
 type DashboardProps = { childId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
 const CalmPathDashboard = CalmPathDashboardRaw as unknown as React.ComponentType<DashboardProps>
+const SUPABASE_TIMEOUT_MS = 10_000
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds`))
+    }, SUPABASE_TIMEOUT_MS)
+
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => window.clearTimeout(timeout))
+  })
+}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -17,25 +31,67 @@ export default function DashboardPage() {
   const [children, setChildren]           = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
   const [showAddChild, setShowAddChild]   = useState(false)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
 
   useEffect(() => {
+    let active = true
     const supabase = createClient()
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        router.push('/login?error=missing_session&from=%2Fdashboard&source=dashboard')
-        return
-      }
-      supabase
-        .from('children')
-        .select('*')
-        .order('created_at')
-        .then(({ data }) => {
-          const kids = (data ?? []) as Child[]
+
+    async function loadDashboard() {
+      setLoading(true)
+      setDashboardError(null)
+
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await withTimeout(supabase.auth.getSession(), 'Dashboard session lookup')
+
+        if (sessionError) {
+          console.error('Dashboard session lookup failed', sessionError)
+          if (active) setDashboardError(`Session error: ${sessionError.message}`)
+          return
+        }
+
+        if (!session) {
+          console.error('Dashboard session missing; redirecting to login')
+          if (active) setLoading(false)
+          router.replace('/login')
+          return
+        }
+
+        const { data, error: childrenError } = await withTimeout(
+          Promise.resolve(supabase.from('children').select('*').order('created_at')),
+          'Dashboard children query'
+        )
+
+        if (childrenError) {
+          console.error('Dashboard children query failed', childrenError)
+          if (active) setDashboardError(`Children query error: ${childrenError.message}`)
+          return
+        }
+
+        const kids = (data ?? []) as Child[]
+
+        if (active) {
           setChildren(kids)
-          if (kids.length >= 1) setSelectedChild(kids[0])
-          setLoading(false)
-        })
-    })
+          setSelectedChild(kids[0] ?? null)
+        }
+      } catch (err) {
+        console.error('Dashboard load failed', err)
+        if (active) {
+          setDashboardError(err instanceof Error ? err.message : 'Unexpected dashboard loading error')
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    loadDashboard()
+
+    return () => {
+      active = false
+    }
   }, [router])
 
   function handleAddSuccess(child: Child) {
@@ -52,6 +108,31 @@ export default function DashboardPage() {
       </div>
     </>
   )
+
+  if (dashboardError) {
+    return (
+      <>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
+        <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '520px', background: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 4px 24px rgba(15,23,42,0.08)' }}>
+            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.35rem', color: '#0F172A', marginBottom: '0.5rem' }}>
+              Dashboard could not load
+            </div>
+            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', padding: '12px 14px', fontSize: '0.9rem', color: '#DC2626', lineHeight: 1.45 }}>
+              {dashboardError}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              style={{ marginTop: '1rem', padding: '10px 14px', background: '#6366F1', color: 'white', border: 'none', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </>
+    )
+  }
 
   if (!selectedChild) {
     return <AddChildModal onSuccess={handleAddSuccess} />

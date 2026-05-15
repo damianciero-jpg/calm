@@ -69,8 +69,7 @@ export default function LoginPage() {
         return
       }
 
-      const role = data.user.user_metadata?.role
-      const destination = role === 'therapist' ? '/patients' : '/dashboard'
+      const destination = '/debug-auth'
 
       router.refresh()
       window.location.href = destination
