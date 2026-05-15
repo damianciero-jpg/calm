@@ -11,11 +11,22 @@ type DebugState = {
   message: string | null
 }
 
+const SUPABASE_TIMEOUT_MS = 10_000
+
 const supabaseUrlExists = !!process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKeyExists = !!(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 )
+
+function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds`)), SUPABASE_TIMEOUT_MS)
+    ),
+  ])
+}
 
 export default function DebugAuthPage() {
   const [state, setState] = useState<DebugState>({
@@ -34,7 +45,7 @@ export default function DebugAuthPage() {
         const {
           data: { session },
           error,
-        } = await supabase.auth.getSession()
+        } = await withTimeout(supabase.auth.getSession(), 'Debug auth session lookup')
 
         if (!active) {
           return
@@ -66,6 +77,17 @@ export default function DebugAuthPage() {
       active = false
     }
   }, [])
+
+  async function clearLocalAuth() {
+    const supabase = createClient()
+
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+  }
 
   const rows = [
     ['Supabase URL exists', supabaseUrlExists ? 'yes' : 'no'],
@@ -105,6 +127,13 @@ export default function DebugAuthPage() {
             <Link href="/login" style={{ padding: '10px 14px', background: '#F1F5F9', color: '#334155', borderRadius: '10px', textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>
               Back to login
             </Link>
+            <button
+              type="button"
+              onClick={clearLocalAuth}
+              style={{ padding: '10px 14px', background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
+            >
+              Clear local auth and reload
+            </button>
           </div>
         </main>
       </div>

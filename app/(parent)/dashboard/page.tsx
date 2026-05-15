@@ -132,6 +132,17 @@ export default function DashboardPage() {
     setShowAddChild(false)
   }
 
+  async function signOutAndRetry() {
+    const supabase = createClient()
+
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+  }
+
   if (loading) return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
@@ -167,6 +178,13 @@ export default function DashboardPage() {
               style={{ marginTop: '1rem', padding: '10px 14px', background: '#6366F1', color: 'white', border: 'none', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
             >
               Try again
+            </button>
+            <button
+              type="button"
+              onClick={signOutAndRetry}
+              style={{ marginTop: '1rem', marginLeft: '0.75rem', padding: '10px 14px', background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
+            >
+              Sign out and retry
             </button>
           </div>
         </div>

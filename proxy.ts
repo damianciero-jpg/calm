@@ -10,9 +10,8 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = pathname === '/login' || pathname === '/signup'
   const isAuthCallback = pathname.startsWith('/auth/')
   const isDebugAuth = pathname === '/debug-auth'
-  const isClientAuthRoute = pathname === '/dashboard'
 
-  if (!user && !isAuthPage && !isAuthCallback && !isDebugAuth && !isClientAuthRoute) {
+  if (!user && !isAuthPage && !isAuthCallback && !isDebugAuth) {
     const url = request.nextUrl.clone()
     const from = `${pathname}${request.nextUrl.search}`
     url.pathname = '/login'
