@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@/lib/supabase";
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 
 // Maps teen mood IDs → DB Mood enum values
 const MOOD_MAP = {
@@ -231,10 +232,10 @@ export default function TeenMode({ childId }) {
 
   useEffect(() => {
     if (!childId) return;
-    const supabase = createClient();
-    supabase.from("sessions").select("id", { count: "exact", head: true })
-      .eq("child_id", childId)
-      .then(({ count }) => setSessionCount(count ?? 0));
+    const db = getFirebaseDb();
+    getDocs(query(collection(db, "sessions"), where("childId", "==", childId)))
+      .then((snapshot) => setSessionCount(snapshot.size))
+      .catch((err) => console.error("Teen sessions query failed:", err));
   }, [childId]);
 
   const mood     = selectedMood ? MOODS.find(m => m.id === selectedMood) : null;
@@ -247,25 +248,20 @@ export default function TeenMode({ childId }) {
 
   function handleComplete() {
     if (childId && selectedMood) {
-      const supabase = createClient();
+      const db = getFirebaseDb();
+      const user = getFirebaseAuth().currentUser;
       const now = new Date();
-      supabase.from("sessions").insert({
-        child_id:  childId,
-        mood:      MOOD_MAP[selectedMood],
-        stars:     3,
-        game:      ACTIVITY[selectedMood]?.name ?? "",
-        world:     "",
-        played_at: now.toISOString(),
-        day_label: DAY_LABELS[now.getDay()],
-      }).then(({ error }) => {
-        if (!error) {
-          fetch("/api/notifications", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ childId }),
-          }).catch(() => {});
-        }
-      });
+      addDoc(collection(db, "sessions"), {
+        childId,
+        parentId: user?.uid ?? "",
+        mood: MOOD_MAP[selectedMood],
+        stars: 3,
+        game: ACTIVITY[selectedMood]?.name ?? "",
+        world: "",
+        playedAt: now,
+        dayLabel: DAY_LABELS[now.getDay()],
+        createdAt: serverTimestamp(),
+      }).catch((err) => console.error("Teen session insert failed:", err));
     }
     setSessionCount(n => n + 1);
     setScreen("done");

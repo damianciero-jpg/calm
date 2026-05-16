@@ -2,10 +2,28 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
-import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
+import { collection, getDocs, query, where } from 'firebase/firestore'
+import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { getFirebaseDb } from '@/lib/firebase'
 import TeenMode from '@/components/teenmode'
 import type { Child } from '@/types/database'
+
+function mapChild(id: string, data: Record<string, unknown>): Child {
+  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const parentId = (data.parentId ?? data.parent_id ?? '') as string
+  return {
+    id,
+    parentId,
+    parent_id: parentId,
+    name: String(data.name ?? ''),
+    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    avatar: typeof data.avatar === 'string' ? data.avatar : '',
+    color: typeof data.color === 'string' ? data.color : '#6366F1',
+    gameMode,
+    game_mode: gameMode,
+    createdAt: data.createdAt,
+  }
+}
 
 export default function PlayTeenPage() {
   return (
@@ -25,27 +43,23 @@ function PlayTeenContent() {
 
   useEffect(() => {
     let active = true
-    const supabase = createClient()
+    const db = getFirebaseDb()
 
     async function loadTeenPlay() {
       try {
-        const session = await getBrowserSession('Teen play session lookup')
+        const user = await waitForFirebaseUser('Teen play session lookup')
         if (!active) return
 
-        if (!session) {
+        if (!user) {
           setAuthMissing(true)
           return
         }
 
-        const { data } = await supabase
-          .from('children')
-          .select('*')
-          .eq('parent_id', session.user.id)
-          .order('created_at')
+        const snapshot = await getDocs(query(collection(db, 'children'), where('parentId', '==', user.uid)))
 
         if (!active) return
 
-        const kids = (data ?? []) as Child[]
+        const kids = snapshot.docs.map(doc => mapChild(doc.id, doc.data()))
 
         let target: Child | null = null
         if (childIdParam) {

@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
+import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 
 const CHILD_AVATARS = [
   { emoji: 'ðŸ˜„', color: '#FFD93D' },
@@ -25,7 +27,7 @@ export default function SignupPage() {
   const [selectedAvatar, setSelectedAvatar] = useState(CHILD_AVATARS[0])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
+  const emailSent = false
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -45,77 +47,38 @@ export default function SignupPage() {
 
     setLoading(true)
 
-    const supabase = createClient()
+    try {
+      const auth = getFirebaseAuth()
+      const db = getFirebaseDb()
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password)
+      const user = credential.user
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role,
-          ...(role === 'parent'
-            ? {
-                child_name: childName.trim(),
-                child_age: Number(childAge),
-                child_avatar: selectedAvatar.emoji,
-                child_color: selectedAvatar.color,
-              }
-            : {}),
-        },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-      },
-    })
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email ?? email.trim(),
+        fullName: fullName.trim(),
+        role,
+        createdAt: serverTimestamp(),
+      })
 
-    if (signUpError) {
-      setError(signUpError.message)
-      setLoading(false)
-      return
-    }
-
-    // Profile row is auto-created by DB trigger (handle_new_user) on auth.users INSERT
-    // If email confirmation is disabled in Supabase, user is already logged in
-    if (data.session) {
-      if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: data.user.email ?? email.trim(),
-          role,
-          full_name: fullName.trim(),
-        })
-
-        if (profileError) {
-          console.error('Signup profile upsert failed', profileError)
-          setError(`Account created, but profile creation failed: ${profileError.message}`)
-          setLoading(false)
-          return
-        }
-      }
-
-      if (role === 'parent' && data.user) {
-        const { error: childError } = await supabase.from('children').insert({
-          parent_id: data.user.id,
+      if (role === 'parent') {
+        await addDoc(collection(db, 'children'), {
+          parentId: user.uid,
           name: childName.trim(),
           age: Number(childAge),
           avatar: selectedAvatar.emoji,
           color: selectedAvatar.color,
-          game_mode: 'kids',
+          gameMode: 'kids',
+          createdAt: serverTimestamp(),
         })
-
-        if (childError) {
-          console.error('Signup child profile insert failed', childError)
-          setError(`Account created, but child profile creation failed: ${childError.message}`)
-          setLoading(false)
-          return
-        }
       }
 
       router.refresh()
-      router.push(role === 'therapist' ? '/patients' : '/dashboard')
-    } else {
-      setEmailSent(true)
+      window.location.assign(role === 'therapist' ? '/patients' : '/dashboard')
+    } catch (err) {
+      console.error('Signup failed', err)
+      setError(err instanceof Error ? err.message : 'Unexpected signup error')
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   if (emailSent) {

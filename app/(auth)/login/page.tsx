@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { getFirebaseAuth } from '@/lib/firebase'
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -21,27 +22,12 @@ export default function LoginPage() {
     let navigationStarted = false
 
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+      const auth = getFirebaseAuth()
+      await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
         password,
-      })
-
-      if (error) {
-        setError(error.message)
-        return
-      }
-
-      if (!data?.session) {
-        setError('Login succeeded, but no browser session was returned.')
-        return
-      }
-
-      await Promise.race([
-        supabase.auth.getSession(),
-        new Promise(resolve => setTimeout(resolve, 1000)),
-      ])
-
+      )
       await sleep(300)
       console.log('Login successful, navigating to dashboard')
       navigationStarted = true

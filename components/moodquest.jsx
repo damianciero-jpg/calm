@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@/lib/supabase";
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 
 const MOODS = [
   { id: "happy", emoji: "😄", label: "Happy", color: "#FFD93D", bg: "#FFF9E6", world: "Sunshine Meadow", desc: "You're glowing today!" },
@@ -349,14 +350,12 @@ export default function MoodQuest({ childId }) {
   // Load real star total from DB for this child
   useEffect(() => {
     if (!childId) return;
-    const supabase = createClient();
-    supabase
-      .from("sessions")
-      .select("stars")
-      .eq("child_id", childId)
-      .then(({ data }) => {
-        if (data) setTotalStars(data.reduce((a, s) => a + s.stars, 0));
-      });
+    const db = getFirebaseDb();
+    getDocs(query(collection(db, "sessions"), where("childId", "==", childId)))
+      .then((snapshot) => {
+        setTotalStars(snapshot.docs.reduce((a, doc) => a + (Number(doc.data().stars) || 0), 0));
+      })
+      .catch((err) => console.error("Session stars query failed:", err));
   }, [childId]);
 
   const mood = selectedMood ? MOODS.find((m) => m.id === selectedMood) : null;
@@ -381,29 +380,22 @@ export default function MoodQuest({ childId }) {
     setScreen("reward");
 
     if (childId) {
-      const supabase = createClient();
+      const db = getFirebaseDb();
+      const user = getFirebaseAuth().currentUser;
       const now = new Date();
       const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      supabase
-        .from("sessions")
-        .insert({
-          child_id:  childId,
-          mood:      selectedMood,
+      addDoc(collection(db, "sessions"), {
+          childId,
+          parentId: user?.uid ?? "",
+          mood: selectedMood,
           stars,
-          game:      MINI_GAMES[selectedMood]?.name ?? "",
-          world:     MOODS.find((m) => m.id === selectedMood)?.world ?? "",
-          played_at: now.toISOString(),
-          day_label: DAY_LABELS[now.getDay()],
+          game: MINI_GAMES[selectedMood]?.name ?? "",
+          world: MOODS.find((m) => m.id === selectedMood)?.world ?? "",
+          playedAt: now,
+          dayLabel: DAY_LABELS[now.getDay()],
+          createdAt: serverTimestamp(),
         })
-        .then(({ error }) => {
-          if (error) console.error("Session insert failed:", error.message);
-          else
-            fetch("/api/notifications", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ childId }),
-            }).catch(() => {});
-        });
+        .catch((err) => console.error("Session insert failed:", err));
     }
   };
 

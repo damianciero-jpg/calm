@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
-import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore'
+import { signOut as firebaseSignOut } from 'firebase/auth'
+import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
@@ -11,6 +13,23 @@ interface Profile {
   id:          string
   full_name:   string | null
   role:        string | null
+}
+
+function mapChild(id: string, data: Record<string, unknown>): Child {
+  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const parentId = (data.parentId ?? data.parent_id ?? '') as string
+  return {
+    id,
+    parentId,
+    parent_id: parentId,
+    name: String(data.name ?? ''),
+    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    avatar: typeof data.avatar === 'string' ? data.avatar : '',
+    color: typeof data.color === 'string' ? data.color : '#6366F1',
+    gameMode,
+    game_mode: gameMode,
+    createdAt: data.createdAt,
+  }
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -48,41 +67,45 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let active = true
-    const supabase = createClient()
+    const db = getFirebaseDb()
 
     async function loadSettings() {
       try {
-        const session = await getBrowserSession('Settings session lookup')
+        const user = await waitForFirebaseUser('Settings session lookup')
         if (!active) return
 
-        if (!session) {
+        if (!user) {
           setAuthMissing(true)
           return
         }
 
-        setEmail(session.user.email ?? '')
+        setEmail(user.email ?? '')
 
-        const [profileRes, childrenRes] = await Promise.all([
-          supabase.from('profiles').select('id, full_name, role').eq('id', session.user.id).single(),
-          supabase.from('children').select('*').eq('parent_id', session.user.id).order('created_at'),
+        const [profileSnap, childrenSnap] = await Promise.all([
+          getDoc(doc(db, 'users', user.uid)),
+          getDocs(query(collection(db, 'children'), where('parentId', '==', user.uid))),
         ])
 
         if (!active) return
 
-        if (profileRes.data) {
-          setProfile(profileRes.data as Profile)
-          setDisplayName(profileRes.data.full_name ?? '')
+        if (profileSnap.exists()) {
+          const data = profileSnap.data()
+          const profileData = {
+            id: user.uid,
+            full_name: typeof data.fullName === 'string' ? data.fullName : '',
+            role: typeof data.role === 'string' ? data.role : 'parent',
+          }
+          setProfile(profileData)
+          setDisplayName(profileData.full_name ?? '')
         }
 
-        if (childrenRes.data) {
-          const kids = childrenRes.data as Child[]
-          setChildren(kids)
-          const modes: Record<string, 'kids' | 'teen'> = {}
-          for (const k of kids) {
-            modes[k.id] = (k.game_mode ?? 'kids') as 'kids' | 'teen'
-          }
-          setGameModes(modes)
+        const kids = childrenSnap.docs.map(doc => mapChild(doc.id, doc.data()))
+        setChildren(kids)
+        const modes: Record<string, 'kids' | 'teen'> = {}
+        for (const k of kids) {
+          modes[k.id] = (k.game_mode ?? 'kids') as 'kids' | 'teen'
         }
+        setGameModes(modes)
       } catch (err) {
         console.error('Settings load failed', err)
         if (active) setAuthMissing(true)
@@ -101,8 +124,8 @@ export default function SettingsPage() {
   async function saveName() {
     if (!profile) return
     setSavingName(true)
-    const supabase = createClient()
-    await supabase.from('profiles').update({ full_name: displayName.trim() }).eq('id', profile.id)
+    const db = getFirebaseDb()
+    await updateDoc(doc(db, 'users', profile.id), { fullName: displayName.trim() })
     setProfile(p => p ? { ...p, full_name: displayName.trim() } : p)
     setSavingName(false)
     setNameSaved(true)
@@ -111,8 +134,7 @@ export default function SettingsPage() {
 
   async function signOut() {
     setSigningOut(true)
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await firebaseSignOut(getFirebaseAuth())
     router.push('/login')
   }
 
@@ -123,8 +145,8 @@ export default function SettingsPage() {
 
   async function updateGameMode(childId: string, mode: 'kids' | 'teen') {
     setGameModes(prev => ({ ...prev, [childId]: mode }))
-    const supabase = createClient()
-    await supabase.from('children').update({ game_mode: mode }).eq('id', childId)
+    const db = getFirebaseDb()
+    await updateDoc(doc(db, 'children', childId), { gameMode: mode })
   }
 
   if (loading) return (

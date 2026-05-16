@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase";
+import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+import { getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const MOOD_META = {
@@ -14,13 +15,13 @@ const MOOD_META = {
 };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const SUPABASE_TIMEOUT_MS = 10000;
+const FIREBASE_TIMEOUT_MS = 10000;
 
 function withTimeout(promise, label) {
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => {
-      reject(new Error(`${label} timed out after ${SUPABASE_TIMEOUT_MS / 1000} seconds`));
-    }, SUPABASE_TIMEOUT_MS);
+      reject(new Error(`${label} timed out after ${FIREBASE_TIMEOUT_MS / 1000} seconds`));
+    }, FIREBASE_TIMEOUT_MS);
 
     Promise.resolve(promise)
       .then(resolve)
@@ -86,13 +87,14 @@ function buildWeekAtAGlance(sessions) {
 }
 
 function dbRowToSession(s) {
+  const playedAt = s.playedAt?.toDate ? s.playedAt.toDate() : new Date(s.playedAt ?? Date.now());
   return {
-    date:  s.day_label,
+    date:  s.dayLabel,
     mood:  s.mood,
     stars: s.stars,
     game:  s.game,
     world: s.world ?? "",
-    time:  new Date(s.played_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    time:  playedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
 }
 
@@ -183,7 +185,7 @@ export default function CalmPathDashboard({
     let active = true;
     if (!childId) { setSessionsLoading(false); return () => { active = false; }; }
 
-    const supabase = createClient();
+    const db = getFirebaseDb();
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -192,23 +194,19 @@ export default function CalmPathDashboard({
       setSessionsError(null);
 
       try {
-        const { data, error } = await withTimeout(
-          supabase
-            .from("sessions")
-            .select("*")
-            .eq("child_id", childId)
-            .gte("played_at", weekAgo.toISOString())
-            .order("played_at", { ascending: true }),
+        const snapshot = await withTimeout(
+          getDocs(
+            query(
+              collection(db, "sessions"),
+              where("childId", "==", childId),
+              where("playedAt", ">=", weekAgo),
+              orderBy("playedAt", "asc")
+            )
+          ),
           "Dashboard sessions query"
         );
 
-        if (error) {
-          console.error("Dashboard sessions query error", error);
-          if (active) setSessionsError(`Dashboard sessions query error: ${error.message}`);
-          return;
-        }
-
-        if (active) setSessions((data ?? []).map(dbRowToSession));
+        if (active) setSessions(snapshot.docs.map(doc => dbRowToSession({ id: doc.id, ...doc.data() })));
       } catch (err) {
         console.error("Dashboard sessions query failed", err);
         if (active) setSessionsError(err instanceof Error ? err.message : "Unexpected sessions loading error");

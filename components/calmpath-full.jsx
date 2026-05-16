@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase";
-import { getBrowserSession } from "@/lib/browser-auth";
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
+import { waitForFirebaseUser } from "@/lib/browser-auth";
+import { getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis } from "recharts";
 
 const MOOD_META = {
@@ -75,12 +76,13 @@ function formatRelativeTime(isoString) {
 }
 
 function dbSessionToRow(s) {
+  const playedAt = s.playedAt?.toDate ? s.playedAt.toDate() : new Date(s.playedAt ?? Date.now());
   return {
-    date:  s.day_label,
+    date:  s.dayLabel,
     mood:  s.mood,
     stars: s.stars,
     game:  s.game,
-    time:  new Date(s.played_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+    time:  playedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
 }
 
@@ -238,17 +240,16 @@ export default function CalmPathApp() {
   // ── Load children + sessions + goals + notes ──────────────────
   useEffect(() => {
     const load = async () => {
-      const supabase = createClient();
-      const session = await getBrowserSession("Therapist dashboard session lookup");
-      if (!session) { setChildrenLoading(false); return; }
-      const user = session.user;
+      const db = getFirebaseDb();
+      const user = await waitForFirebaseUser("Therapist dashboard session lookup");
+      if (!user) { setChildrenLoading(false); return; }
 
-      setTherapistName(user.user_metadata?.full_name ?? "Therapist");
+      const therapistSnap = await getDoc(doc(db, "users", user.uid));
+      const therapistProfile = therapistSnap.exists() ? therapistSnap.data() : {};
+      setTherapistName(therapistProfile.fullName ?? "Therapist");
 
-      const { data: childRows } = await supabase
-        .from("children")
-        .select("*, parent:profiles!children_parent_id_fkey(full_name)")
-        .order("created_at");
+      const childSnap = await getDocs(query(collection(db, "children"), orderBy("createdAt")));
+      const childRows = childSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (!childRows?.length) { setChildrenLoading(false); return; }
 
@@ -256,15 +257,21 @@ export default function CalmPathApp() {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
-      const [sessRes, goalsRes, notesRes] = await Promise.all([
-        supabase.from("sessions").select("*").in("child_id", ids).gte("played_at", weekAgo.toISOString()).order("played_at"),
-        supabase.from("iep_goals").select("*").in("child_id", ids),
-        supabase.from("therapist_notes").select("*").in("child_id", ids).order("created_at", { ascending: false }),
+      const [sessionsSnap, goalsSnap, notesSnap] = await Promise.all([
+        getDocs(query(collection(db, "sessions"), where("playedAt", ">=", weekAgo), orderBy("playedAt"))),
+        getDocs(collection(db, "iepGoals")),
+        getDocs(query(collection(db, "therapistNotes"), orderBy("createdAt", "desc"))),
       ]);
 
-      const allSessions = sessRes.data ?? [];
-      const allGoals    = goalsRes.data ?? [];
-      const allNotes    = notesRes.data ?? [];
+      const allSessions = sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allGoals    = goalsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allNotes    = notesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const parentIds   = [...new Set(childRows.map(c => c.parentId).filter(Boolean))];
+      const parentPairs = await Promise.all(parentIds.map(async id => {
+        const parentSnap = await getDoc(doc(db, "users", id));
+        return [id, parentSnap.exists() ? parentSnap.data().fullName : "Parent"];
+      }));
+      const parentNames = Object.fromEntries(parentPairs);
 
       const built = childRows.map(child => ({
         id:       child.id,
@@ -272,11 +279,11 @@ export default function CalmPathApp() {
         age:      child.age,
         avatar:   child.avatar,
         color:    child.color,
-        parent:   child.parent?.full_name ?? "Parent",
-        therapist: user.user_metadata?.full_name ?? "Therapist",
-        sessions: allSessions.filter(s => s.child_id === child.id).map(dbSessionToRow),
-        iepGoals: allGoals.filter(g => g.child_id === child.id).map(g => `${g.label}: ${g.score}/${g.max_score}`),
-        notes:    allNotes.find(n => n.child_id === child.id)?.content ?? "",
+        parent:   parentNames[child.parentId] ?? "Parent",
+        therapist: therapistProfile.fullName ?? "Therapist",
+        sessions: allSessions.filter(s => s.childId === child.id).map(dbSessionToRow),
+        iepGoals: allGoals.filter(g => g.childId === child.id).map(g => `${g.label}: ${g.score}/${g.maxScore ?? 5}`),
+        notes:    allNotes.find(n => n.childId === child.id)?.content ?? "",
       }));
 
       setChildren(built);
@@ -288,24 +295,30 @@ export default function CalmPathApp() {
 
   // ── Load notifications + Realtime ────────────────────────────
   useEffect(() => {
-    const supabase = createClient();
+    const db = getFirebaseDb();
 
     const loadNotifs = async () => {
-      const { data } = await supabase
-        .from("notifications")
-        .select("*, child:children(name, avatar, color)")
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const snapshot = await getDocs(query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50)));
+      const data = await Promise.all(snapshot.docs.map(async d => {
+        const n = d.data();
+        let child = null;
+        if (n.childId) {
+          const childSnap = await getDoc(doc(db, "children", n.childId));
+          child = childSnap.exists() ? childSnap.data() : null;
+        }
+        const createdAt = n.createdAt?.toDate ? n.createdAt.toDate() : new Date();
+        return { id: d.id, child, createdAt, ...n };
+      }));
       if (data) {
         setNotifications(data.map(n => ({
           id:          n.id,
-          childId:     n.child_id,
+          childId:     n.childId,
           childName:   n.child?.name   ?? "",
           childAvatar: n.child?.avatar ?? "👦",
           type:        n.type,
           title:       n.title,
           body:        n.body,
-          time:        formatRelativeTime(n.created_at),
+          time:        formatRelativeTime(n.createdAt),
           read:        n.read,
           color:       NOTIF_META[n.type]?.color ?? "#6366F1",
           icon:        NOTIF_META[n.type]?.icon  ?? "🔔",
@@ -315,13 +328,9 @@ export default function CalmPathApp() {
 
     loadNotifs();
 
-    const channel = supabase
-      .channel("notifications-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" },
-        () => loadNotifs())
-      .subscribe();
+    const unsubscribe = onSnapshot(query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50)), () => loadNotifs());
 
-    return () => { supabase.removeChannel(channel); };
+    return () => unsubscribe();
   }, []);
 
   const unread = notifications.filter(n => !n.read).length;
@@ -333,17 +342,15 @@ export default function CalmPathApp() {
 
   function markRead(id) {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    const supabase = createClient();
-    supabase.from("notifications").update({ read: true }).eq("id", id).then(() => {});
+    updateDoc(doc(getFirebaseDb(), "notifications", id), { read: true }).catch(() => {});
   }
 
   async function markAllRead() {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     showToast("All notifications marked as read");
-    const supabase = createClient();
     const ids = notifications.filter(n => !n.read).map(n => n.id);
     if (ids.length) {
-      await supabase.from("notifications").update({ read: true }).in("id", ids);
+      await Promise.all(ids.map(id => updateDoc(doc(getFirebaseDb(), "notifications", id), { read: true })));
     }
   }
 

@@ -2,14 +2,33 @@
 
 import { useEffect, useState } from 'react'
 import type React from 'react'
-import { createClient } from '@/lib/supabase'
-import { SignInRequired, withTimeout } from '@/lib/browser-auth'
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import { onAuthStateChanged } from 'firebase/auth'
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { SignInRequired } from '@/lib/browser-auth'
 import CalmPathDashboardRaw from '@/components/calmpath-dashboard'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
 type DashboardProps = { childId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
 const CalmPathDashboard = CalmPathDashboardRaw as unknown as React.ComponentType<DashboardProps>
+
+function mapChild(id: string, data: Record<string, unknown>): Child {
+  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const parentId = (data.parentId ?? data.parent_id ?? '') as string
+  return {
+    id,
+    parentId,
+    parent_id: parentId,
+    name: String(data.name ?? ''),
+    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    avatar: typeof data.avatar === 'string' ? data.avatar : '',
+    color: typeof data.color === 'string' ? data.color : '#6366F1',
+    gameMode,
+    game_mode: gameMode,
+    createdAt: data.createdAt,
+  }
+}
 
 export default function DashboardPage() {
   const [loading, setLoading]             = useState(true)
@@ -22,50 +41,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true
-    const supabase = createClient()
+    const auth = getFirebaseAuth()
+    const db = getFirebaseDb()
 
-    async function loadDashboard() {
+    async function loadDashboard(userId: string) {
       setLoading(true)
       setDashboardError(null)
       setAuthMissing(false)
       setIsEmpty(false)
 
       try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await withTimeout(supabase.auth.getSession(), 'Dashboard session lookup')
-
-        if (sessionError) {
-          console.error('Dashboard getSession error', sessionError)
-          if (active) setDashboardError(sessionError.message)
-          return
-        }
-
-        if (!session) {
-          console.error('Dashboard session lookup returned no session')
-          if (active) setAuthMissing(true)
-          return
-        }
-
-        const user = session.user
-
-        const { data, error: childrenError } = await withTimeout(
-          supabase
-            .from('children')
-            .select('*')
-            .eq('parent_id', user.id)
-            .order('created_at'),
-          'Dashboard children query'
+        const snapshot = await getDocs(
+          query(
+            collection(db, 'children'),
+            where('parentId', '==', userId),
+            orderBy('createdAt')
+          )
         )
-
-        if (childrenError) {
-          console.error('Dashboard children query error', childrenError)
-          if (active) setDashboardError(childrenError.message)
-          return
-        }
-
-        const kids = (data ?? []) as Child[]
+        const kids = snapshot.docs.map(doc => mapChild(doc.id, doc.data()))
 
         if (active) {
           setChildren(kids)
@@ -82,10 +75,19 @@ export default function DashboardPage() {
       }
     }
 
-    loadDashboard()
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      if (!active) return
+      if (!user) {
+        setAuthMissing(true)
+        setLoading(false)
+        return
+      }
+      loadDashboard(user.uid)
+    })
 
     return () => {
       active = false
+      unsubscribe()
     }
   }, [])
 

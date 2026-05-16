@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import type { Session } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase'
+import type { User } from 'firebase/auth'
+import { onAuthStateChanged } from 'firebase/auth'
+import { getFirebaseAuth } from '@/lib/firebase'
 
 export const AUTH_TIMEOUT_MS = 30_000
 const SESSION_RETRY_DELAY_MS = 500
@@ -21,21 +22,12 @@ export function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<
   ])
 }
 
-export async function getBrowserSession(label: string): Promise<Session | null> {
-  const supabase = createClient()
+export async function getBrowserSession(label: string): Promise<User | null> {
+  const auth = getFirebaseAuth()
 
   for (let attempt = 1; attempt <= SESSION_RETRY_ATTEMPTS; attempt += 1) {
-    const {
-      data: { session },
-      error,
-    } = await withTimeout(supabase.auth.getSession(), label)
-
-    if (error) {
-      throw error
-    }
-
-    if (session) {
-      return session
+    if (auth.currentUser) {
+      return auth.currentUser
     }
 
     if (attempt < SESSION_RETRY_ATTEMPTS) {
@@ -44,6 +36,24 @@ export async function getBrowserSession(label: string): Promise<Session | null> 
   }
 
   return null
+}
+
+export function waitForFirebaseUser(label: string): Promise<User | null> {
+  const auth = getFirebaseAuth()
+
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser)
+  }
+
+  return withTimeout(
+    new Promise<User | null>(resolve => {
+      const unsubscribe = onAuthStateChanged(auth, user => {
+        unsubscribe()
+        resolve(user)
+      })
+    }),
+    label
+  )
 }
 
 export function SignInRequired({ message = 'Please sign in' }: { message?: string }) {

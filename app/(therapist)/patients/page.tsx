@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
+import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
 import CalmPathApp from '@/components/calmpath-full'
 
 export default function PatientsPage() {
@@ -13,8 +13,8 @@ export default function PatientsPage() {
 
     async function loadSession() {
       try {
-        const session = await getBrowserSession('Patients session lookup')
-        if (active && !session) setAuthMissing(true)
+        const user = await waitForFirebaseUser('Patients session lookup')
+        if (active && !user) setAuthMissing(true)
       } catch (err) {
         console.error('Patients session lookup failed', err)
         if (active) setAuthMissing(true)

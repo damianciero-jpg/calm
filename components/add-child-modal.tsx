@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import type React from 'react'
-import { createClient } from '@/lib/supabase'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 import type { Child } from '@/types/database'
 
 // Same 6 mood emojis and colors as moodquest.jsx
@@ -52,40 +53,28 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
     setError(null)
 
     try {
-      const supabase = createClient()
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-
-      if (userError) {
-        console.error('Add child getUser failed', userError)
-        setError(userError.message)
-        return
-      }
+      const user = getFirebaseAuth().currentUser
 
       if (!user) {
         setError('Session expired. Please sign in again.')
         return
       }
 
-      const { data, error: err } = await supabase
-        .from('children')
-        .insert({
-          parent_id: user.id,
-          name: name.trim(),
-          age: parseInt(age, 10),
-          avatar: selected.emoji,
-          color: selected.color,
-          game_mode: 'kids',
-        })
-        .select()
-        .single()
-
-      if (err) {
-        console.error('Add child insert failed', err)
-        setError(err.message)
-        return
+      const db = getFirebaseDb()
+      const child = {
+        parentId: user.uid,
+        parent_id: user.uid,
+        name: name.trim(),
+        age: parseInt(age, 10),
+        avatar: selected.emoji,
+        color: selected.color,
+        gameMode: 'kids',
+        game_mode: 'kids',
+        createdAt: serverTimestamp(),
       }
+      const ref = await addDoc(collection(db, 'children'), child)
 
-      onSuccess(data as Child)
+      onSuccess({ id: ref.id, ...child } as Child)
     } catch (err) {
       console.error('Add child failed', err)
       setError(err instanceof Error ? err.message : 'Unexpected child profile error')

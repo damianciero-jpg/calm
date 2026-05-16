@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
-import { getBrowserSession, SignInRequired } from '@/lib/browser-auth'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, updateDoc, where } from 'firebase/firestore'
+import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { getFirebaseDb } from '@/lib/firebase'
 
 interface Notification {
   id:         string
@@ -43,26 +44,53 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     let active = true
-    const supabase = createClient()
+    const db = getFirebaseDb()
 
     async function loadNotifications() {
       try {
-        const session = await getBrowserSession('Notifications session lookup')
+        const user = await waitForFirebaseUser('Notifications session lookup')
         if (!active) return
 
-        if (!session) {
+        if (!user) {
           setAuthMissing(true)
           return
         }
 
-        const { data } = await supabase
-          .from('notifications')
-          .select('id, type, title, body, read, created_at, child:children(name, avatar, color)')
-          .eq('recipient_id', session.user.id)
-          .order('created_at', { ascending: false })
-          .limit(50)
+        const snapshot = await getDocs(
+          query(
+            collection(db, 'notifications'),
+            where('recipientId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+          )
+        )
+        const rows = await Promise.all(snapshot.docs.map(async notificationDoc => {
+          const data = notificationDoc.data()
+          let child = null
+          if (typeof data.childId === 'string') {
+            const childSnap = await getDoc(doc(db, 'children', data.childId))
+            if (childSnap.exists()) {
+              const childData = childSnap.data()
+              child = {
+                name: String(childData.name ?? ''),
+                avatar: String(childData.avatar ?? ''),
+                color: String(childData.color ?? '#6366F1'),
+              }
+            }
+          }
+          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
+          return {
+            id: notificationDoc.id,
+            type: String(data.type ?? 'alert'),
+            title: String(data.title ?? ''),
+            body: String(data.body ?? ''),
+            read: Boolean(data.read),
+            created_at: createdAt.toISOString(),
+            child,
+          }
+        }))
 
-        if (active) setNotifs((data ?? []) as unknown as Notification[])
+        if (active) setNotifs(rows)
       } catch (err) {
         console.error('Notifications load failed', err)
         if (active) setAuthMissing(true)
@@ -80,8 +108,8 @@ export default function NotificationsPage() {
 
   async function markRead(id: string) {
     setMarking(id)
-    const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    const db = getFirebaseDb()
+    await updateDoc(doc(db, 'notifications', id), { read: true })
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setMarking(null)
   }
@@ -89,8 +117,8 @@ export default function NotificationsPage() {
   async function markAllRead() {
     const unread = notifs.filter(n => !n.read).map(n => n.id)
     if (!unread.length) return
-    const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).in('id', unread)
+    const db = getFirebaseDb()
+    await Promise.all(unread.map(id => updateDoc(doc(db, 'notifications', id), { read: true })))
     setNotifs(prev => prev.map(n => ({ ...n, read: true })))
   }
 

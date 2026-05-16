@@ -3,7 +3,9 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where } from 'firebase/firestore'
+import { onAuthStateChanged } from 'firebase/auth'
+import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 
 const AUTH_PATHS = new Set(['/login', '/signup'])
 
@@ -26,52 +28,41 @@ function BottomNavContent() {
   const [unread,       setUnread]       = useState(0)
 
   useEffect(() => {
-    const supabase = createClient()
-    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
+    const auth = getFirebaseAuth()
+    const db = getFirebaseDb()
+    let unsubscribeNotifications: (() => void) | null = null
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_, session) => {
-      if (!session) {
+    const unsubscribeAuth = onAuthStateChanged(auth, async user => {
+      if (!user) {
         setRole(null); setUid(null); setFirstChildId(null); setUnread(0)
-        if (realtimeChannel) { supabase.removeChannel(realtimeChannel); realtimeChannel = null }
+        if (unsubscribeNotifications) { unsubscribeNotifications(); unsubscribeNotifications = null }
         return
       }
 
-      const r   = (session.user.user_metadata?.role as string) ?? null
-      const uid = session.user.id
+      const profileSnap = await getDoc(doc(db, 'users', user.uid))
+      const r = profileSnap.exists() && typeof profileSnap.data().role === 'string'
+        ? profileSnap.data().role
+        : 'parent'
+      const uid = user.uid
       setRole(r)
       setUid(uid)
 
       if (r === 'parent' && !firstChildId) {
-        const { data } = await supabase.from('children').select('id').order('created_at').limit(1).single()
-        if (data) setFirstChildId(data.id)
+        const childrenSnap = await getDocs(query(collection(db, 'children'), where('parentId', '==', uid), limit(1)))
+        const first = childrenSnap.docs[0]
+        if (first) setFirstChildId(first.id)
       }
 
-      const { count } = await supabase
-        .from('notifications').select('id', { count: 'exact', head: true })
-        .eq('recipient_id', uid).eq('read', false)
-      setUnread(count ?? 0)
-
-      if (!realtimeChannel) {
-        realtimeChannel = supabase.channel('bottom-nav-notifs')
-          .on('postgres_changes', {
-            event: 'INSERT', schema: 'public', table: 'notifications',
-            filter: `recipient_id=eq.${uid}`,
-          }, () => setUnread(n => n + 1))
-          .on('postgres_changes', {
-            event: 'UPDATE', schema: 'public', table: 'notifications',
-            filter: `recipient_id=eq.${uid}`,
-          }, () => {
-            supabase.from('notifications').select('id', { count: 'exact', head: true })
-              .eq('recipient_id', uid).eq('read', false)
-              .then(({ count: c }) => setUnread(c ?? 0))
-          })
-          .subscribe()
-      }
+      if (unsubscribeNotifications) unsubscribeNotifications()
+      unsubscribeNotifications = onSnapshot(
+        query(collection(db, 'notifications'), where('recipientId', '==', uid), where('read', '==', false)),
+        snapshot => setUnread(snapshot.size)
+      )
     })
 
     return () => {
-      subscription.unsubscribe()
-      if (realtimeChannel) supabase.removeChannel(realtimeChannel)
+      unsubscribeAuth()
+      if (unsubscribeNotifications) unsubscribeNotifications()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
