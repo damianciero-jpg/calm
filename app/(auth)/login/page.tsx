@@ -33,7 +33,7 @@ export default function LoginPage() {
           email,
           password,
         }),
-        10000,
+        30000,
         'Supabase login'
       )
 
@@ -51,6 +51,11 @@ export default function LoginPage() {
       window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
+      if (err instanceof Error && err.message.startsWith('Supabase login timed out')) {
+        setError('Login is taking longer than expected. Please try again.')
+        return
+      }
+
       setError(err instanceof Error ? err.message : 'Unexpected login error')
     } finally {
       if (!navigationStarted) {
