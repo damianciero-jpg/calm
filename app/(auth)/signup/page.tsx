@@ -76,6 +76,21 @@ export default function SignupPage() {
     // Profile row is auto-created by DB trigger (handle_new_user) on auth.users INSERT
     // If email confirmation is disabled in Supabase, user is already logged in
     if (data.session) {
+      if (data.user) {
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: data.user.id,
+          role,
+          full_name: fullName.trim(),
+        })
+
+        if (profileError) {
+          console.error('Signup profile upsert failed', profileError)
+          setError(`Account created, but profile creation failed: ${profileError.message}`)
+          setLoading(false)
+          return
+        }
+      }
+
       if (role === 'parent' && data.user) {
         const { error: childError } = await supabase.from('children').insert({
           parent_id: data.user.id,

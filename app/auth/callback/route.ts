@@ -27,8 +27,21 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error && data.user) {
       const role = data.user.user_metadata?.role
+      const normalizedRole = role === 'therapist' ? 'therapist' : 'parent'
 
-      if (role === 'parent') {
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: data.user.id,
+        role: normalizedRole,
+        full_name: typeof data.user.user_metadata?.full_name === 'string'
+          ? data.user.user_metadata.full_name
+          : '',
+      })
+
+      if (profileError) {
+        console.error('Auth callback profile upsert failed', profileError)
+      }
+
+      if (normalizedRole === 'parent') {
         const metadata = data.user.user_metadata
         const childName = typeof metadata?.child_name === 'string' ? metadata.child_name.trim() : ''
         const childAge = Number(metadata?.child_age)
@@ -59,7 +72,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const redirectTo = role === 'therapist' ? '/patients' : next
+      const redirectTo = normalizedRole === 'therapist' ? '/patients' : next
       return NextResponse.redirect(`${origin}${redirectTo}`)
     }
   }

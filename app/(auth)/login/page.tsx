@@ -1,25 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-
-function getRedirectErrorMessage(search: string) {
-  const params = new URLSearchParams(search)
-  const error = params.get('error')
-  const from = params.get('from')
-  const fromPath = from?.split('?')[0]
-
-  if (error === 'missing_session' && (fromPath === '/dashboard' || fromPath === '/patients')) {
-    return `Sign in again to continue to ${from}. If this repeats, check that Supabase auth cookies are being saved for this domain.`
-  }
-
-  if (error === 'auth_callback_failed') {
-    return 'Authentication callback failed. Please try signing in again.'
-  }
-
-  return null
-}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -30,83 +13,20 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
-async function testSupabaseAuthEndpoint(supabaseUrl: string, supabaseAnonKey: string) {
-  const controller = new AbortController()
-  const timeoutId = window.setTimeout(() => controller.abort(), 5000)
-
-  try {
-    const response = await fetch(`${supabaseUrl}/auth/v1/settings`, {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-      },
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-
-    if (response.status === 200) {
-      return
-    }
-
-    if (response.status === 401) {
-      throw new Error(
-        'Supabase reached, but anon key was rejected. Check NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.'
-      )
-    }
-
-    throw new Error(`Cannot reach Supabase auth endpoint: HTTP ${response.status}`)
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Supabase auth endpoint timed out.')
-    }
-
-    throw err
-  } finally {
-    window.clearTimeout(timeoutId)
-  }
-}
-
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [redirectError, setRedirectError] = useState<string | null>(null)
-  const [connectivityStatus, setConnectivityStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    setRedirectError(getRedirectErrorMessage(window.location.search))
-  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    setRedirectError(null)
-    setConnectivityStatus(null)
     setLoading(true)
     let navigationStarted = false
 
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-      if (!supabaseUrl) {
-        throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
-      }
-
-      if (!supabaseAnonKey) {
-        throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
-      }
-
-      console.log('Supabase URL host:', new URL(supabaseUrl).host)
-
-      console.log('login clicked')
-      await testSupabaseAuthEndpoint(supabaseUrl, supabaseAnonKey)
-      console.log('Supabase auth endpoint reachable')
-      setConnectivityStatus('Supabase auth endpoint reachable')
-
       const supabase = createClient()
-      console.log('signInWithPassword starting')
 
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
@@ -117,29 +37,13 @@ export default function LoginPage() {
         'Supabase login'
       )
 
-      console.log('signInWithPassword finished', {
-        hasUser: !!data?.user,
-        hasSession: !!data?.session,
-        error,
-      })
-
       if (error) {
-        console.error('Login failed:', error)
         setError(error.message)
         return
       }
 
-      if (!data?.user) {
-        const message = 'Login succeeded but no user session was returned.'
-        console.error('Login failed:', message)
-        setError(message)
-        return
-      }
-
-      if (!data.session) {
-        const message = 'Login succeeded, but no browser session was returned.'
-        console.error('Login failed:', message)
-        setError(message)
+      if (!data?.session) {
+        setError('Login succeeded, but no browser session was returned.')
         return
       }
 
@@ -217,18 +121,6 @@ export default function LoginPage() {
               {error && (
                 <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#DC2626' }}>
                   {error}
-                </div>
-              )}
-
-              {redirectError && (
-                <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#C2410C', lineHeight: 1.45 }}>
-                  {redirectError}
-                </div>
-              )}
-
-              {connectivityStatus && (
-                <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#15803D' }}>
-                  {connectivityStatus}
                 </div>
               )}
 
