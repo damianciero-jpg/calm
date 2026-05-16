@@ -33,6 +33,29 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000} seconds`)), ms)
+    ),
+  ])
+}
+
+function getChildSaveErrorMessage(err: unknown) {
+  const code = typeof err === 'object' && err && 'code' in err ? err.code : null
+
+  if (code === 'permission-denied') {
+    return 'Firestore permission denied. Check Firestore security rules for children.'
+  }
+
+  if (code === 'unavailable') {
+    return 'Firebase is unavailable. Try again.'
+  }
+
+  return err instanceof Error ? err.message : 'Unexpected child profile error'
+}
+
 interface Props {
   onSuccess: (child: Child) => void
   onCancel?: () => void
@@ -72,12 +95,16 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
         game_mode: 'kids',
         createdAt: serverTimestamp(),
       }
-      const ref = await addDoc(collection(db, 'children'), child)
+      const ref = await withTimeout(
+        addDoc(collection(db, 'children'), child),
+        15000,
+        'Child profile save'
+      )
 
       onSuccess({ id: ref.id, ...child } as Child)
     } catch (err) {
       console.error('Add child failed', err)
-      setError(err instanceof Error ? err.message : 'Unexpected child profile error')
+      setError(getChildSaveErrorMessage(err))
     } finally {
       setSaving(false)
     }
