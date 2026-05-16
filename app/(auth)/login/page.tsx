@@ -4,6 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,6 +38,8 @@ export default function LoginPage() {
       }
 
       navigationStarted = true
+      await supabase.auth.getSession()
+      await sleep(300)
       window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)

@@ -4,7 +4,13 @@ import Link from 'next/link'
 import type { Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
 
-export const AUTH_TIMEOUT_MS = 10_000
+export const AUTH_TIMEOUT_MS = 30_000
+const SESSION_RETRY_DELAY_MS = 500
+const SESSION_RETRY_ATTEMPTS = 3
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 export function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<T> {
   return Promise.race([
@@ -17,16 +23,27 @@ export function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<
 
 export async function getBrowserSession(label: string): Promise<Session | null> {
   const supabase = createClient()
-  const {
-    data: { session },
-    error,
-  } = await withTimeout(supabase.auth.getSession(), label)
 
-  if (error) {
-    throw error
+  for (let attempt = 1; attempt <= SESSION_RETRY_ATTEMPTS; attempt += 1) {
+    const {
+      data: { session },
+      error,
+    } = await withTimeout(supabase.auth.getSession(), label)
+
+    if (error) {
+      throw error
+    }
+
+    if (session) {
+      return session
+    }
+
+    if (attempt < SESSION_RETRY_ATTEMPTS) {
+      await sleep(SESSION_RETRY_DELAY_MS)
+    }
   }
 
-  return session
+  return null
 }
 
 export function SignInRequired({ message = 'Please sign in' }: { message?: string }) {
