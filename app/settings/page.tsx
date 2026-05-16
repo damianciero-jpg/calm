@@ -210,14 +210,14 @@ export default function SettingsPage() {
                     <div key={child.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
                       <div style={{
                         width: '38px', height: '38px', borderRadius: '50%',
-                        background: `${child.color}18`, border: `2px solid ${child.color}55`,
+                        background: `${child.color ?? '#6366F1'}18`, border: `2px solid ${child.color ?? '#6366F1'}55`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0,
                       }}>
-                        {child.avatar}
+                        {child.avatar ?? ''}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.9rem' }}>{child.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Age {child.age}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Age {child.age ?? '-'}</div>
                       </div>
                       <div style={{ display: 'flex', borderRadius: '20px', overflow: 'hidden', border: '1px solid #E2E8F0', flexShrink: 0 }}>
                         <button

@@ -136,24 +136,7 @@ export default function DashboardPage() {
 
   if (isEmpty || !selectedChild) {
     return (
-      <>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
-        <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
-          <div style={{ width: '100%', maxWidth: '460px', background: 'white', borderRadius: '16px', padding: '1.5rem', boxShadow: '0 4px 24px rgba(15,23,42,0.08)', textAlign: 'center' }}>
-            <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.35rem', color: '#0F172A', marginBottom: '0.5rem' }}>
-              No child profile found. Add your first child profile.
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowAddChild(true)}
-              style={{ marginTop: '1rem', padding: '10px 14px', background: '#6366F1', color: 'white', border: 'none', borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700, cursor: 'pointer' }}
-            >
-              Add child profile
-            </button>
-          </div>
-        </div>
-        {showAddChild && <AddChildModal onSuccess={handleAddSuccess} onCancel={() => setShowAddChild(false)} />}
-      </>
+      <AddChildModal onSuccess={handleAddSuccess} />
     )
   }
 
@@ -166,14 +149,14 @@ export default function DashboardPage() {
             onClick={() => setSelectedChild(child)}
             style={{
               padding: '6px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-              background: selectedChild.id === child.id ? child.color : '#F1F5F9',
+              background: selectedChild.id === child.id ? child.color ?? '#6366F1' : '#F1F5F9',
               color: selectedChild.id === child.id ? 'white' : '#374151',
               fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.82rem',
               transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '6px',
               flexShrink: 0,
             }}
           >
-            <span>{child.avatar}</span> {child.name}
+            <span>{child.avatar ?? ''}</span> {child.name}
           </button>
         ))}
         <button
@@ -193,9 +176,9 @@ export default function DashboardPage() {
       <CalmPathDashboard
         childId={selectedChild.id}
         childName={selectedChild.name}
-        childAge={selectedChild.age}
-        childAvatar={selectedChild.avatar}
-        childColor={selectedChild.color}
+        childAge={selectedChild.age ?? 0}
+        childAvatar={selectedChild.avatar ?? ''}
+        childColor={selectedChild.color ?? '#6366F1'}
         childGameMode={selectedChild.game_mode ?? 'kids'}
       />
 

@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
 
       const { error: profileError } = await supabase.from('profiles').upsert({
         id: data.user.id,
+        email: data.user.email ?? null,
         role: normalizedRole,
         full_name: typeof data.user.user_metadata?.full_name === 'string'
           ? data.user.user_metadata.full_name

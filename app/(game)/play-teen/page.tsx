@@ -40,6 +40,7 @@ function PlayTeenContent() {
         const { data } = await supabase
           .from('children')
           .select('*')
+          .eq('parent_id', session.user.id)
           .order('created_at')
 
         if (!active) return
@@ -54,7 +55,7 @@ function PlayTeenContent() {
         }
 
         if (!target) { router.push('/play'); return }
-        if (target.age < 13) { router.push(`/play?childId=${target.id}`); return }
+        if ((target.age ?? 0) < 13) { router.push(`/play?childId=${target.id}`); return }
 
         setSelectedChild(target)
       } catch (err) {

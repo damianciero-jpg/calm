@@ -41,6 +41,7 @@ function PlayPageContent() {
         const { data } = await supabase
           .from('children')
           .select('*')
+          .eq('parent_id', session.user.id)
           .order('created_at')
 
         if (!active) return
@@ -156,29 +157,29 @@ function ChildSelector({ children, onSelect }: { children: Child[]; onSelect: (c
                   onClick={() => onSelect(child)}
                   style={{
                     background: 'white',
-                    border: `3px solid ${child.color}44`,
+                    border: `3px solid ${child.color ?? '#6366F1'}44`,
                     borderRadius: '20px',
                     padding: '20px 12px',
                     cursor: 'pointer',
                     transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                    boxShadow: `0 4px 16px ${child.color}22`,
+                    boxShadow: `0 4px 16px ${child.color ?? '#6366F1'}22`,
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
                   }}
                 >
                   <div style={{
                     width: '64px', height: '64px', borderRadius: '50%',
-                    background: `${child.color}18`,
-                    border: `3px solid ${child.color}55`,
+                    background: `${child.color ?? '#6366F1'}18`,
+                    border: `3px solid ${child.color ?? '#6366F1'}55`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '2.2rem',
                   }}>
-                    {child.avatar}
+                    {child.avatar ?? ''}
                   </div>
                   <div style={{ fontFamily: "'Baloo 2',cursive", fontSize: '1.1rem', fontWeight: 800, color: '#333' }}>
                     {child.name}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#999', fontWeight: 700 }}>
-                    Age {child.age}
+                    Age {child.age ?? '-'}
                   </div>
                 </button>
               ))}

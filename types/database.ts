@@ -1,11 +1,11 @@
-// Auto-generate accurate types after Phase 2 schema is applied:
-//   npx supabase gen types typescript --project-id pvxhlvsoshtbcwpgfixs > types/database.ts
-// (requires: npx supabase login  OR  SUPABASE_ACCESS_TOKEN env var)
+// Auto-generate accurate types after applying the Supabase schema:
+//   npx supabase gen types typescript --project-id <project-id> > types/database.ts
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[]
 
 export type Role = 'parent' | 'therapist' | 'admin'
 export type Mood = 'happy' | 'calm' | 'anxious' | 'angry' | 'sad' | 'tired'
+export type GameMode = 'kids' | 'teen'
 export type NotificationType = 'alert' | 'pattern' | 'positive'
 
 export interface Database {
@@ -14,19 +14,25 @@ export interface Database {
       profiles: {
         Row: {
           id: string
-          role: Role
-          full_name: string
-          created_at: string
+          email: string | null
+          full_name: string | null
+          role: Role | string | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id: string
-          role: Role
-          full_name?: string
-          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          role?: Role | string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
-          role?: Role
-          full_name?: string
+          email?: string | null
+          full_name?: string | null
+          role?: Role | string | null
+          updated_at?: string | null
         }
       }
       children: {
@@ -34,83 +40,95 @@ export interface Database {
           id: string
           parent_id: string
           name: string
-          age: number
-          avatar: string
-          color: string
-          therapist_id: string | null
-          created_at: string
-          game_mode: 'kids' | 'teen' | null
+          age: number | null
+          avatar: string | null
+          color: string | null
+          game_mode: GameMode | string | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id?: string
           parent_id: string
           name: string
-          age: number
-          avatar?: string
-          color?: string
-          therapist_id?: string | null
-          created_at?: string
-          game_mode?: 'kids' | 'teen'
+          age?: number | null
+          avatar?: string | null
+          color?: string | null
+          game_mode?: GameMode | string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
+          parent_id?: string
           name?: string
-          age?: number
-          avatar?: string
-          color?: string
-          therapist_id?: string | null
-          game_mode?: 'kids' | 'teen'
+          age?: number | null
+          avatar?: string | null
+          color?: string | null
+          game_mode?: GameMode | string | null
+          updated_at?: string | null
         }
       }
       sessions: {
         Row: {
           id: string
           child_id: string
-          mood: Mood
-          stars: 1 | 2 | 3
-          game: string
-          world: string
-          played_at: string
-          day_label: string
+          mood: Mood | string
+          stars: number
+          game: string | null
+          world: string | null
+          day_label: string | null
+          played_at: string | null
+          created_at: string | null
         }
         Insert: {
           id?: string
           child_id: string
-          mood: Mood
-          stars: 1 | 2 | 3
-          game: string
-          world?: string
-          played_at?: string
-          day_label?: string
+          mood: Mood | string
+          stars?: number
+          game?: string | null
+          world?: string | null
+          day_label?: string | null
+          played_at?: string | null
+          created_at?: string | null
         }
         Update: {
-          mood?: Mood
-          stars?: 1 | 2 | 3
-          game?: string
-          world?: string
+          child_id?: string
+          mood?: Mood | string
+          stars?: number
+          game?: string | null
+          world?: string | null
+          day_label?: string | null
+          played_at?: string | null
         }
       }
-      therapist_notes: {
+      notifications: {
         Row: {
           id: string
-          child_id: string
-          therapist_id: string
-          content: string
-          ai_summary: Json | null
-          week_of: string
-          created_at: string
+          recipient_id: string | null
+          child_id: string | null
+          type: NotificationType | string
+          title: string
+          body: string | null
+          read: boolean | null
+          created_at: string | null
         }
         Insert: {
           id?: string
-          child_id: string
-          therapist_id: string
-          content?: string
-          ai_summary?: Json | null
-          week_of: string
-          created_at?: string
+          recipient_id?: string | null
+          child_id?: string | null
+          type?: NotificationType | string
+          title: string
+          body?: string | null
+          read?: boolean | null
+          created_at?: string | null
         }
         Update: {
-          content?: string
-          ai_summary?: Json | null
+          recipient_id?: string | null
+          child_id?: string | null
+          type?: NotificationType | string
+          title?: string
+          body?: string | null
+          read?: boolean | null
         }
       }
       iep_goals: {
@@ -118,58 +136,53 @@ export interface Database {
           id: string
           child_id: string
           label: string
-          score: number
-          max_score: number
-          updated_at: string
+          score: number | null
+          max_score: number | null
+          created_at: string | null
         }
         Insert: {
           id?: string
           child_id: string
           label: string
-          score: number
-          max_score?: number
-          updated_at?: string
+          score?: number | null
+          max_score?: number | null
+          created_at?: string | null
         }
         Update: {
+          child_id?: string
           label?: string
-          score?: number
-          max_score?: number
-          updated_at?: string
+          score?: number | null
+          max_score?: number | null
         }
       }
-      notifications: {
+      therapist_notes: {
         Row: {
           id: string
-          recipient_id: string
           child_id: string
-          type: NotificationType
-          title: string
-          body: string
-          read: boolean
-          created_at: string
+          therapist_id: string | null
+          content: string | null
+          created_at: string | null
         }
         Insert: {
           id?: string
-          recipient_id: string
           child_id: string
-          type: NotificationType
-          title: string
-          body?: string
-          read?: boolean
-          created_at?: string
+          therapist_id?: string | null
+          content?: string | null
+          created_at?: string | null
         }
         Update: {
-          read?: boolean
+          child_id?: string
+          therapist_id?: string | null
+          content?: string | null
         }
       }
     }
   }
 }
 
-// Convenience row types
-export type Profile       = Database['public']['Tables']['profiles']['Row']
-export type Child         = Database['public']['Tables']['children']['Row']
-export type Session       = Database['public']['Tables']['sessions']['Row']
+export type Profile = Database['public']['Tables']['profiles']['Row']
+export type Child = Database['public']['Tables']['children']['Row']
+export type Session = Database['public']['Tables']['sessions']['Row']
+export type Notification = Database['public']['Tables']['notifications']['Row']
+export type IepGoal = Database['public']['Tables']['iep_goals']['Row']
 export type TherapistNote = Database['public']['Tables']['therapist_notes']['Row']
-export type IepGoal       = Database['public']['Tables']['iep_goals']['Row']
-export type Notification  = Database['public']['Tables']['notifications']['Row']
