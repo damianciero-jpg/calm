@@ -30,6 +30,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
+async function testSupabaseAuthEndpoint(supabaseUrl: string) {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 5000)
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Supabase auth endpoint timed out after 5 seconds')
+    }
+
+    throw err
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -49,9 +73,23 @@ export default function LoginPage() {
     let navigationStarted = false
 
     try {
-      const supabase = createClient()
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+      if (!supabaseUrl) {
+        throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
+      }
+
+      console.log('Supabase URL host:', new URL(supabaseUrl).host)
 
       console.log('login clicked')
+      try {
+        await testSupabaseAuthEndpoint(supabaseUrl)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unexpected connectivity error'
+        throw new Error(`Cannot reach Supabase auth endpoint: ${message}`)
+      }
+
+      const supabase = createClient()
       console.log('signInWithPassword starting')
 
       const { data, error } = await withTimeout(
