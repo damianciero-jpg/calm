@@ -30,22 +30,34 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
-async function testSupabaseAuthEndpoint(supabaseUrl: string) {
+async function testSupabaseAuthEndpoint(supabaseUrl: string, supabaseAnonKey: string) {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 5000)
 
   try {
     const response = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
       signal: controller.signal,
       cache: 'no-store',
     })
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    if (response.status === 200) {
+      return
     }
+
+    if (response.status === 401) {
+      throw new Error(
+        'Supabase reached, but anon key was rejected. Check NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel.'
+      )
+    }
+
+    throw new Error(`Cannot reach Supabase auth endpoint: HTTP ${response.status}`)
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Supabase auth endpoint timed out after 5 seconds')
+      throw new Error('Supabase auth endpoint timed out.')
     }
 
     throw err
@@ -59,6 +71,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [redirectError, setRedirectError] = useState<string | null>(null)
+  const [connectivityStatus, setConnectivityStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -69,25 +82,28 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     setRedirectError(null)
+    setConnectivityStatus(null)
     setLoading(true)
     let navigationStarted = false
 
     try {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
       if (!supabaseUrl) {
         throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
       }
 
+      if (!supabaseAnonKey) {
+        throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
+      }
+
       console.log('Supabase URL host:', new URL(supabaseUrl).host)
 
       console.log('login clicked')
-      try {
-        await testSupabaseAuthEndpoint(supabaseUrl)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unexpected connectivity error'
-        throw new Error(`Cannot reach Supabase auth endpoint: ${message}`)
-      }
+      await testSupabaseAuthEndpoint(supabaseUrl, supabaseAnonKey)
+      console.log('Supabase auth endpoint reachable')
+      setConnectivityStatus('Supabase auth endpoint reachable')
 
       const supabase = createClient()
       console.log('signInWithPassword starting')
@@ -207,6 +223,12 @@ export default function LoginPage() {
               {redirectError && (
                 <div style={{ background: '#FFF7ED', border: '1px solid #FDBA74', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#C2410C', lineHeight: 1.45 }}>
                   {redirectError}
+                </div>
+              )}
+
+              {connectivityStatus && (
+                <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#15803D' }}>
+                  {connectivityStatus}
                 </div>
               )}
 
