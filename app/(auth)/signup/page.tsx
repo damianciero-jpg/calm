@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { assertFirebaseEnv, getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 
 const CHILD_AVATARS = [
   { emoji: 'ðŸ˜„', color: '#FFD93D' },
@@ -16,6 +16,23 @@ const CHILD_AVATARS = [
   { emoji: 'ðŸ˜´', color: '#FDCB6E' },
 ]
 
+const FIREBASE_CHILD_AVATARS = [
+  { emoji: '⭐', color: '#FFD93D' },
+  { emoji: '🌿', color: '#6BCB77' },
+  { emoji: '🌊', color: '#74B9FF' },
+  { emoji: '🔥', color: '#FF6B6B' },
+  { emoji: '💜', color: '#A29BFE' },
+  { emoji: '🌙', color: '#FDCB6E' },
+]
+
+function getAuthErrorMessage(err: unknown) {
+  if (typeof err === 'object' && err && 'code' in err && err.code === 'auth/configuration-not-found') {
+    return 'Firebase Authentication is not enabled. Enable Email/Password sign-in in Firebase Console.'
+  }
+
+  return err instanceof Error ? err.message : 'Unexpected signup error'
+}
+
 export default function SignupPage() {
   const router = useRouter()
   const [fullName, setFullName] = useState('')
@@ -24,7 +41,7 @@ export default function SignupPage() {
   const [role, setRole] = useState<'parent' | 'therapist'>('parent')
   const [childName, setChildName] = useState('')
   const [childAge, setChildAge] = useState('')
-  const [selectedAvatar, setSelectedAvatar] = useState(CHILD_AVATARS[0])
+  const [selectedAvatar, setSelectedAvatar] = useState(FIREBASE_CHILD_AVATARS[0])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const emailSent = false
@@ -48,6 +65,7 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
+      assertFirebaseEnv()
       const auth = getFirebaseAuth()
       const db = getFirebaseDb()
       const credential = await createUserWithEmailAndPassword(auth, email.trim(), password)
@@ -76,7 +94,7 @@ export default function SignupPage() {
       window.location.assign(role === 'therapist' ? '/patients' : '/dashboard')
     } catch (err) {
       console.error('Signup failed', err)
-      setError(err instanceof Error ? err.message : 'Unexpected signup error')
+      setError(getAuthErrorMessage(err))
       setLoading(false)
     }
   }
@@ -227,7 +245,7 @@ export default function SignupPage() {
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>Child avatar</label>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      {CHILD_AVATARS.map(avatar => (
+                      {FIREBASE_CHILD_AVATARS.map(avatar => (
                         <button
                           key={avatar.emoji}
                           type="button"

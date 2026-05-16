@@ -3,10 +3,18 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import { getFirebaseAuth } from '@/lib/firebase'
+import { assertFirebaseEnv, getFirebaseAuth } from '@/lib/firebase'
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function getAuthErrorMessage(err: unknown) {
+  if (typeof err === 'object' && err && 'code' in err && err.code === 'auth/configuration-not-found') {
+    return 'Firebase Authentication is not enabled. Enable Email/Password sign-in in Firebase Console.'
+  }
+
+  return err instanceof Error ? err.message : 'Unexpected login error'
 }
 
 export default function LoginPage() {
@@ -22,6 +30,7 @@ export default function LoginPage() {
     let navigationStarted = false
 
     try {
+      assertFirebaseEnv()
       const auth = getFirebaseAuth()
       await signInWithEmailAndPassword(
         auth,
@@ -34,7 +43,7 @@ export default function LoginPage() {
       window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
-      setError(err instanceof Error ? err.message : 'Unexpected login error')
+      setError(getAuthErrorMessage(err))
     } finally {
       if (!navigationStarted) {
         setLoading(false)
