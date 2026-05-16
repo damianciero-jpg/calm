@@ -13,45 +13,138 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
+type SupabaseTokenResponse = {
+  access_token?: string
+  refresh_token?: string
+  error?: string
+  error_description?: string
+  msg?: string
+  message?: string
+}
+
+function isTimeoutError(err: unknown, label: string) {
+  return err instanceof Error && err.message.startsWith(`${label} timed out`)
+}
+
+function getRestErrorMessage(json: SupabaseTokenResponse | null, fallback: string) {
+  return json?.error_description ?? json?.msg ?? json?.message ?? json?.error ?? fallback
+}
+
+async function loginWithRestFallback(email: string, password: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+  if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
+  if (!supabaseAnonKey) throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
+
+  const response = await withTimeout(
+    fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+      }),
+    }),
+    30000,
+    'Supabase REST login'
+  )
+
+  let json: SupabaseTokenResponse | null = null
+  try {
+    json = await response.json()
+  } catch {
+    json = null
+  }
+
+  const responseError = getRestErrorMessage(json, `HTTP ${response.status}`)
+
+  if (!response.ok) {
+    console.error('REST fallback HTTP status:', response.status)
+    console.error('REST fallback response error:', responseError)
+    throw new Error(responseError)
+  }
+
+  if (json?.error || json?.error_description || json?.msg || json?.message) {
+    console.error('REST fallback response error:', responseError)
+    throw new Error(responseError)
+  }
+
+  if (!json?.access_token || !json?.refresh_token) {
+    throw new Error('Backup login did not return a session.')
+  }
+
+  return {
+    access_token: json.access_token,
+    refresh_token: json.refresh_token,
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setStatus('Signing in…')
     setLoading(true)
     let navigationStarted = false
 
     try {
       const supabase = createClient()
 
-      const { data, error } = await withTimeout(
-        supabase.auth.signInWithPassword({
-          email,
-          password,
-        }),
-        30000,
-        'Supabase login'
-      )
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.signInWithPassword({
+            email,
+            password,
+          }),
+          30000,
+          'Supabase login'
+        )
 
-      if (error) {
-        setError(error.message)
-        return
+        if (error) {
+          setError(error.message)
+          return
+        }
+
+        if (!data?.session) {
+          setError('Login succeeded, but no browser session was returned.')
+          return
+        }
+      } catch (err) {
+        if (!isTimeoutError(err, 'Supabase login')) {
+          throw err
+        }
+
+        console.error('SDK login timeout:', err)
+        setStatus('Trying backup login…')
+
+        const session = await loginWithRestFallback(email, password)
+        const { error: setSessionError } = await supabase.auth.setSession(session)
+
+        if (setSessionError) {
+          setError(setSessionError.message)
+          return
+        }
       }
 
-      if (!data?.session) {
-        setError('Login succeeded, but no browser session was returned.')
-        return
-      }
-
+      setStatus('Opening dashboard…')
       navigationStarted = true
       window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
-      if (err instanceof Error && err.message.startsWith('Supabase login timed out')) {
+      if (isTimeoutError(err, 'Supabase login') || isTimeoutError(err, 'Supabase REST login')) {
         setError('Login is taking longer than expected. Please try again.')
         return
       }
@@ -60,6 +153,7 @@ export default function LoginPage() {
     } finally {
       if (!navigationStarted) {
         setLoading(false)
+        setStatus(null)
       }
     }
   }
@@ -129,8 +223,14 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {status && (
+                <div style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: '8px', padding: '10px 14px', fontSize: '0.82rem', color: '#4338CA' }}>
+                  {status}
+                </div>
+              )}
+
               <button className="auth-btn" type="submit" disabled={loading}>
-                {loading ? 'Signing in…' : 'Sign in'}
+                {loading ? status ?? 'Signing in…' : 'Sign in'}
               </button>
             </form>
 
