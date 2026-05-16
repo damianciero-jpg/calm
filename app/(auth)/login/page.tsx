@@ -37,9 +37,14 @@ export default function LoginPage() {
         return
       }
 
-      navigationStarted = true
-      await supabase.auth.getSession()
+      await Promise.race([
+        supabase.auth.getSession(),
+        new Promise(resolve => setTimeout(resolve, 1000)),
+      ])
+
       await sleep(300)
+      console.log('Login successful, navigating to dashboard')
+      navigationStarted = true
       window.location.assign('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
