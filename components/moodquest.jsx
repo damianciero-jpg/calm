@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb } from "@/lib/firebase";
 
 const MOODS = [
   { id: "happy", emoji: "😄", label: "Happy", color: "#FFD93D", bg: "#FFF9E6", world: "Sunshine Meadow", desc: "You're glowing today!" },
@@ -339,24 +339,25 @@ function btnStyle(color) {
   };
 }
 
-export default function MoodQuest({ childId }) {
+export default function MoodQuest({ childId, parentId }) {
   const [screen, setScreen] = useState("welcome");
   const [selectedMood, setSelectedMood] = useState(null);
   const [gameStars, setGameStars] = useState(0);
   const [totalStars, setTotalStars] = useState(0);
   const [earnedBadge, setEarnedBadge] = useState(null);
   const [sessionLog, setSessionLog] = useState([]);
+  const [sessionSaveError, setSessionSaveError] = useState(null);
 
   // Load real star total from DB for this child
   useEffect(() => {
-    if (!childId) return;
+    if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("childId", "==", childId)))
+    getDocs(query(collection(db, "sessions"), where("childId", "==", childId), where("parentId", "==", parentId)))
       .then((snapshot) => {
         setTotalStars(snapshot.docs.reduce((a, doc) => a + (Number(doc.data().stars) || 0), 0));
       })
       .catch((err) => console.error("Session stars query failed:", err));
-  }, [childId]);
+  }, [childId, parentId]);
 
   const mood = selectedMood ? MOODS.find((m) => m.id === selectedMood) : null;
   const game = selectedMood ? MINI_GAMES[selectedMood] : null;
@@ -368,7 +369,7 @@ export default function MoodQuest({ childId }) {
 
   const handlePlayGame = () => setScreen("game");
 
-  const handleGameComplete = (stars) => {
+  const handleGameComplete = async (stars) => {
     setGameStars(stars);
     setTotalStars((s) => s + stars);
     const badge = REWARDS[Math.floor(Math.random() * REWARDS.length)];
@@ -379,23 +380,27 @@ export default function MoodQuest({ childId }) {
     ]);
     setScreen("reward");
 
-    if (childId) {
+    if (childId && parentId) {
       const db = getFirebaseDb();
-      const user = getFirebaseAuth().currentUser;
       const now = new Date();
       const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      addDoc(collection(db, "sessions"), {
+      try {
+        setSessionSaveError(null);
+        await addDoc(collection(db, "sessions"), {
           childId,
-          parentId: user?.uid ?? "",
+          parentId,
           mood: selectedMood,
           stars,
           game: MINI_GAMES[selectedMood]?.name ?? "",
           world: MOODS.find((m) => m.id === selectedMood)?.world ?? "",
-          playedAt: now,
+          playedAt: serverTimestamp(),
           dayLabel: DAY_LABELS[now.getDay()],
           createdAt: serverTimestamp(),
-        })
-        .catch((err) => console.error("Session insert failed:", err));
+        });
+      } catch (err) {
+        console.error("Session insert failed:", err);
+        setSessionSaveError("Session could not be saved");
+      }
     }
   };
 
@@ -669,6 +674,12 @@ export default function MoodQuest({ childId }) {
                 </div>
               </div>
             </div>
+
+            {sessionSaveError && (
+              <div style={{ marginBottom: "1rem", background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626", borderRadius: "12px", padding: "10px 12px", fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: "0.86rem" }}>
+                {sessionSaveError}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "10px" }}>
               <button className="play-btn" onClick={handlePlayAgain} style={{

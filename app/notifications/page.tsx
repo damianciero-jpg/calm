@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, updateDoc, where } from 'firebase/firestore'
-import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 
 interface Notification {
   id:         string
@@ -38,9 +39,10 @@ function timeAgo(iso: string) {
 
 export default function NotificationsPage() {
   const [loading, setLoading]             = useState(true)
-  const [authMissing, setAuthMissing]     = useState(false)
+  const [error, setError]                 = useState<string | null>(null)
   const [notifs,  setNotifs]              = useState<Notification[]>([])
   const [marking, setMarking]             = useState<string | null>(null)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
     let active = true
@@ -48,13 +50,7 @@ export default function NotificationsPage() {
 
     async function loadNotifications() {
       try {
-        const user = await waitForFirebaseUser('Notifications session lookup')
-        if (!active) return
-
-        if (!user) {
-          setAuthMissing(true)
-          return
-        }
+        if (!user) return
 
         const snapshot = await getDocs(
           query(
@@ -93,18 +89,26 @@ export default function NotificationsPage() {
         if (active) setNotifs(rows)
       } catch (err) {
         console.error('Notifications load failed', err)
-        if (active) setAuthMissing(true)
+        if (active) setError(err instanceof Error ? err.message : 'Notifications could not load')
       } finally {
         if (active) setLoading(false)
       }
     }
 
+    if (authLoading) return () => { active = false }
+    if (!user) {
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    setLoading(true)
+    setError(null)
     loadNotifications()
 
     return () => {
       active = false
     }
-  }, [])
+  }, [user, authLoading])
 
   async function markRead(id: string) {
     setMarking(id)
@@ -124,7 +128,13 @@ export default function NotificationsPage() {
 
   const unreadCount = notifs.filter(n => !n.read).length
 
-  if (authMissing) {
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", color: '#64748B' }}>Loading...</div>
+    )
+  }
+
+  if (!user) {
     return <SignInRequired />
   }
 
@@ -153,7 +163,9 @@ export default function NotificationsPage() {
 
         {/* List */}
         <div style={{ padding: '1rem 1.25rem', maxWidth: '640px', margin: '0 auto' }}>
-          {loading ? (
+          {error ? (
+            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '12px', padding: '12px 14px', color: '#DC2626', fontSize: '0.9rem' }}>{error}</div>
+          ) : loading ? (
             <div style={{ textAlign: 'center', padding: '4rem 0', color: '#94A3B8', fontSize: '2rem' }}>🔔</div>
           ) : notifs.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>

@@ -1,11 +1,12 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore'
-import { signOut as firebaseSignOut } from 'firebase/auth'
-import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import { signOut as firebaseSignOut, updateProfile } from 'firebase/auth'
+import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
@@ -52,18 +53,20 @@ export default function SettingsPage() {
   const router = useRouter()
 
   const [loading,      setLoading]      = useState(true)
-  const [authMissing,  setAuthMissing]  = useState(false)
   const [profile,      setProfile]      = useState<Profile | null>(null)
   const [email,        setEmail]        = useState('')
   const [displayName,  setDisplayName]  = useState('')
   const [savingName,   setSavingName]   = useState(false)
   const [nameSaved,    setNameSaved]    = useState(false)
+  const [nameError,    setNameError]    = useState<string | null>(null)
+  const [loadError,    setLoadError]    = useState<string | null>(null)
 
   const [children,     setChildren]     = useState<Child[]>([])
   const [showAddChild, setShowAddChild] = useState(false)
   const [gameModes,    setGameModes]    = useState<Record<string, 'kids' | 'teen'>>({})
 
   const [signingOut,   setSigningOut]   = useState(false)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
     let active = true
@@ -71,15 +74,10 @@ export default function SettingsPage() {
 
     async function loadSettings() {
       try {
-        const user = await waitForFirebaseUser('Settings session lookup')
-        if (!active) return
-
-        if (!user) {
-          setAuthMissing(true)
-          return
-        }
+        if (!user) return
 
         setEmail(user.email ?? '')
+        setLoadError(null)
 
         const [profileSnap, childrenSnap] = await Promise.all([
           getDoc(doc(db, 'users', user.uid)),
@@ -97,6 +95,9 @@ export default function SettingsPage() {
           }
           setProfile(profileData)
           setDisplayName(profileData.full_name ?? '')
+        } else {
+          setProfile({ id: user.uid, full_name: user.displayName ?? '', role: 'parent' })
+          setDisplayName(user.displayName ?? '')
         }
 
         const kids = childrenSnap.docs.map(doc => mapChild(doc.id, doc.data()))
@@ -108,28 +109,51 @@ export default function SettingsPage() {
         setGameModes(modes)
       } catch (err) {
         console.error('Settings load failed', err)
-        if (active) setAuthMissing(true)
+        if (active) setLoadError(err instanceof Error ? err.message : 'Settings could not load')
       } finally {
         if (active) setLoading(false)
       }
     }
 
+    if (authLoading) return () => { active = false }
+    if (!user) {
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    setLoading(true)
     loadSettings()
 
     return () => {
       active = false
     }
-  }, [router])
+  }, [router, user, authLoading])
 
   async function saveName() {
-    if (!profile) return
+    if (!user) return
     setSavingName(true)
-    const db = getFirebaseDb()
-    await updateDoc(doc(db, 'users', profile.id), { fullName: displayName.trim() })
-    setProfile(p => p ? { ...p, full_name: displayName.trim() } : p)
-    setSavingName(false)
-    setNameSaved(true)
-    setTimeout(() => setNameSaved(false), 2000)
+    setNameError(null)
+    const trimmedName = displayName.trim()
+    try {
+      const db = getFirebaseDb()
+      await updateProfile(user, { displayName: trimmedName })
+      await setDoc(doc(db, 'users', user.uid), {
+        fullName: trimmedName,
+        email: user.email ?? '',
+        updatedAt: serverTimestamp(),
+      }, { merge: true })
+      setProfile(p => p ? { ...p, full_name: trimmedName } : { id: user.uid, full_name: trimmedName, role: 'parent' })
+      setNameSaved(true)
+      setTimeout(() => setNameSaved(false), 2000)
+    } catch (err) {
+      console.error('Display name save failed', err)
+      const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+      setNameError(code.includes('permission-denied')
+        ? 'Firestore permission denied. Check Firestore security rules for users.'
+        : err instanceof Error ? err.message : 'Display name could not be saved')
+    } finally {
+      setSavingName(false)
+    }
   }
 
   async function signOut() {
@@ -149,11 +173,11 @@ export default function SettingsPage() {
     await updateDoc(doc(db, 'children', childId), { gameMode: mode })
   }
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>⚙️</div>
+  if (authLoading || loading) return (
+    <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", color: '#64748B' }}>Loading...</div>
   )
 
-  if (authMissing) {
+  if (!user) {
     return <SignInRequired />
   }
 
@@ -196,9 +220,19 @@ export default function SettingsPage() {
                       transition: 'all 0.15s', whiteSpace: 'nowrap',
                     }}
                   >
-                    {nameSaved ? '✓ Saved' : savingName ? '…' : 'Save'}
+                    {nameSaved ? 'Saved' : savingName ? '...' : 'Save'}
                   </button>
                 </div>
+                {nameError && (
+                  <div style={{ marginTop: '8px', background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '8px', padding: '8px 10px', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                    {nameError}
+                  </div>
+                )}
+                {loadError && (
+                  <div style={{ marginTop: '8px', background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '8px', padding: '8px 10px', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                    {loadError}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -251,7 +285,7 @@ export default function SettingsPage() {
                             cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
                             transition: 'all 0.15s',
                           }}
-                        >🎮 Kids</button>
+                        >ðŸŽ® Kids</button>
                         <button
                           onClick={() => updateGameMode(child.id, 'teen')}
                           style={{
@@ -261,7 +295,7 @@ export default function SettingsPage() {
                             cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
                             transition: 'all 0.15s',
                           }}
-                        >🌙 Teen</button>
+                        >ðŸŒ™ Teen</button>
                       </div>
                     </div>
                   ))
@@ -283,8 +317,8 @@ export default function SettingsPage() {
           {/* Notification preferences placeholder */}
           <Section title="Notifications">
             <div style={{ fontSize: '0.85rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🔔</span>
-              <span>Notification preferences — coming soon.</span>
+              <span>ðŸ””</span>
+              <span>Notification preferences â€” coming soon.</span>
             </div>
           </Section>
 
@@ -299,7 +333,7 @@ export default function SettingsPage() {
               opacity: signingOut ? 0.6 : 1, transition: 'all 0.15s',
             }}
           >
-            {signingOut ? 'Signing out…' : 'Sign out'}
+            {signingOut ? 'Signing outâ€¦' : 'Sign out'}
           </button>
 
         </div>

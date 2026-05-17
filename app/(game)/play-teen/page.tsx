@@ -3,20 +3,22 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import TeenMode from '@/components/teenmode'
 import type { Child } from '@/types/database'
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
-  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
+  const gameMode = age >= 13 ? 'teen' : 'kids'
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
     parentId,
     parent_id: parentId,
     name: String(data.name ?? ''),
-    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    age,
     avatar: typeof data.avatar === 'string' ? data.avatar : '',
     color: typeof data.color === 'string' ? data.color : '#6366F1',
     gameMode,
@@ -40,6 +42,7 @@ function PlayTeenContent() {
   const [loading,       setLoading]       = useState(true)
   const [authMissing,   setAuthMissing]   = useState(false)
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
     let active = true
@@ -47,13 +50,7 @@ function PlayTeenContent() {
 
     async function loadTeenPlay() {
       try {
-        const user = await waitForFirebaseUser('Teen play session lookup')
-        if (!active) return
-
-        if (!user) {
-          setAuthMissing(true)
-          return
-        }
+        if (!user) return
 
         const snapshot = await getDocs(query(collection(db, 'children'), where('parentId', '==', user.uid)))
 
@@ -80,17 +77,26 @@ function PlayTeenContent() {
       }
     }
 
+    if (authLoading) return () => { active = false }
+    if (!user) {
+      setAuthMissing(true)
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    setLoading(true)
+    setAuthMissing(false)
     loadTeenPlay()
 
     return () => {
       active = false
     }
-  }, [router, childIdParam])
+  }, [router, childIdParam, user, authLoading])
 
-  if (loading) return <FullPageLoader />
+  if (authLoading || loading) return <FullPageLoader />
   if (authMissing) return <SignInRequired />
   if (!selectedChild) return null
-  return <TeenMode childId={selectedChild.id} />
+  return <TeenMode childId={selectedChild.id} parentId={user?.uid} />
 }
 
 function FullPageLoader() {

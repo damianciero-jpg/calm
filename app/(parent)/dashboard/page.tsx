@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react'
 import type React from 'react'
 import { collection, doc as firestoreDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore'
-import { onAuthStateChanged } from 'firebase/auth'
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import { SignInRequired } from '@/lib/browser-auth'
 import CalmPathDashboardRaw from '@/components/calmpath-dashboard'
 import AddChildModal from '@/components/add-child-modal'
 import type { Child } from '@/types/database'
 
-type DashboardProps = { childId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
+type DashboardProps = { childId: string; parentId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
 const CalmPathDashboard = CalmPathDashboardRaw as unknown as React.ComponentType<DashboardProps>
 
 function getAutoGameMode(age: number | null | undefined) {
@@ -41,18 +41,16 @@ export default function DashboardPage() {
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
   const [showAddChild, setShowAddChild]   = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
-  const [authMissing, setAuthMissing] = useState(false)
   const [isEmpty, setIsEmpty] = useState(false)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
     let active = true
-    const auth = getFirebaseAuth()
     const db = getFirebaseDb()
 
     async function loadDashboard(userId: string) {
       setLoading(true)
       setDashboardError(null)
-      setAuthMissing(false)
       setIsEmpty(false)
 
       try {
@@ -98,21 +96,18 @@ export default function DashboardPage() {
       }
     }
 
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      if (!active) return
-      if (!user) {
-        setAuthMissing(true)
-        setLoading(false)
-        return
-      }
-      loadDashboard(user.uid)
-    })
+    if (authLoading) return () => { active = false }
+    if (!user) {
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    loadDashboard(user.uid)
 
     return () => {
       active = false
-      unsubscribe()
     }
-  }, [])
+  }, [user, authLoading])
 
   function handleAddSuccess(child: Child) {
     const normalizedChild = { ...child, gameMode: getAutoGameMode(child.age), game_mode: getAutoGameMode(child.age) }
@@ -122,16 +117,16 @@ export default function DashboardPage() {
     setShowAddChild(false)
   }
 
-  if (loading) return (
+  if (authLoading || loading) return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
       <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
-        <div style={{ color: '#64748B', fontSize: '0.95rem' }}>Loading dashboard...</div>
+        <div style={{ color: '#64748B', fontSize: '0.95rem' }}>Loading...</div>
       </div>
     </>
   )
 
-  if (authMissing) {
+  if (!user) {
     return <SignInRequired />
   }
 
@@ -207,6 +202,7 @@ export default function DashboardPage() {
 
       <CalmPathDashboard
         childId={selectedChild.id}
+        parentId={user.uid}
         childName={selectedChild.name}
         childAge={selectedChild.age ?? 0}
         childAvatar={selectedChild.avatar ?? ''}

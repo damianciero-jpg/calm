@@ -3,20 +3,22 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { collection, getDocs, query, where } from 'firebase/firestore'
-import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import MoodQuest from '@/components/moodquest.jsx'
 import type { Child } from '@/types/database'
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
-  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
+  const gameMode = age >= 13 ? 'teen' : 'kids'
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
     parentId,
     parent_id: parentId,
     name: String(data.name ?? ''),
-    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    age,
     avatar: typeof data.avatar === 'string' ? data.avatar : '',
     color: typeof data.color === 'string' ? data.color : '#6366F1',
     gameMode,
@@ -41,6 +43,7 @@ function PlayPageContent() {
   const [authMissing, setAuthMissing]     = useState(false)
   const [children, setChildren]           = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
     let active = true
@@ -48,13 +51,7 @@ function PlayPageContent() {
 
     async function loadPlay() {
       try {
-        const user = await waitForFirebaseUser('Play session lookup')
-        if (!active) return
-
-        if (!user) {
-          setAuthMissing(true)
-          return
-        }
+        if (!user) return
 
         const snapshot = await getDocs(query(collection(db, 'children'), where('parentId', '==', user.uid)))
 
@@ -89,17 +86,29 @@ function PlayPageContent() {
       }
     }
 
+    if (authLoading) return () => { active = false }
+    if (!user) {
+      setAuthMissing(true)
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    setLoading(true)
+    setAuthMissing(false)
     loadPlay()
 
     return () => {
       active = false
     }
-  }, [router, childIdParam])
+  }, [router, childIdParam, user, authLoading])
 
-  if (loading)       return <FullPageLoader />
+  if (authLoading || loading) return <FullPageLoader />
   if (authMissing)   return <SignInRequired />
-  if (selectedChild) return <MoodQuest childId={selectedChild.id} />
-  return <ChildSelector children={children} onSelect={setSelectedChild} />
+  if (selectedChild && user) return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
+  return <ChildSelector children={children} onSelect={child => {
+    if ((child.age ?? 0) >= 13) router.push(`/play-teen?childId=${child.id}`)
+    else setSelectedChild(child)
+  }} />
 }
 
 // ── Loading screen ────────────────────────────────────────────

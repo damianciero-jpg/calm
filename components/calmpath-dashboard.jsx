@@ -166,6 +166,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function CalmPathDashboard({
   childId      = null,
+  parentId     = null,
   childName    = "Your Child",
   childAge     = null,
   childAvatar  = "👦",
@@ -197,6 +198,7 @@ export default function CalmPathDashboard({
             query(
               collection(db, "sessions"),
               where("childId", "==", childId),
+              where("parentId", "==", parentId),
               where("playedAt", ">=", weekAgo),
               orderBy("playedAt", "asc")
             )
@@ -217,7 +219,7 @@ export default function CalmPathDashboard({
     return () => {
       active = false;
     };
-  }, [childId]);
+  }, [childId, parentId]);
 
   const chartData     = buildChartData(sessions);
   const moodBreakdown = buildMoodBreakdown(sessions);

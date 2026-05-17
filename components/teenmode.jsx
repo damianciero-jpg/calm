@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
-import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
+import { getFirebaseDb } from "@/lib/firebase";
 
 // Maps teen mood IDs → DB Mood enum values
 const MOOD_MAP = {
@@ -225,18 +225,19 @@ function ReflectionActivity({ moodId, activity, onComplete }) {
 
 // ── Main component ─────────────────────────────────────────────────────
 
-export default function TeenMode({ childId }) {
+export default function TeenMode({ childId, parentId }) {
   const [screen,       setScreen]       = useState("checkin");
   const [selectedMood, setSelectedMood] = useState(null);
   const [sessionCount, setSessionCount] = useState(0);
+  const [sessionSaveError, setSessionSaveError] = useState(null);
 
   useEffect(() => {
-    if (!childId) return;
+    if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("childId", "==", childId)))
+    getDocs(query(collection(db, "sessions"), where("childId", "==", childId), where("parentId", "==", parentId)))
       .then((snapshot) => setSessionCount(snapshot.size))
       .catch((err) => console.error("Teen sessions query failed:", err));
-  }, [childId]);
+  }, [childId, parentId]);
 
   const mood     = selectedMood ? MOODS.find(m => m.id === selectedMood) : null;
   const activity = selectedMood ? ACTIVITY[selectedMood] : null;
@@ -246,22 +247,27 @@ export default function TeenMode({ childId }) {
     setScreen("activity");
   }
 
-  function handleComplete() {
-    if (childId && selectedMood) {
+  async function handleComplete() {
+    if (childId && parentId && selectedMood) {
       const db = getFirebaseDb();
-      const user = getFirebaseAuth().currentUser;
       const now = new Date();
-      addDoc(collection(db, "sessions"), {
-        childId,
-        parentId: user?.uid ?? "",
-        mood: MOOD_MAP[selectedMood],
-        stars: 3,
-        game: ACTIVITY[selectedMood]?.name ?? "",
-        world: "",
-        playedAt: now,
-        dayLabel: DAY_LABELS[now.getDay()],
-        createdAt: serverTimestamp(),
-      }).catch((err) => console.error("Teen session insert failed:", err));
+      try {
+        setSessionSaveError(null);
+        await addDoc(collection(db, "sessions"), {
+          parentId,
+          childId,
+          mood: MOOD_MAP[selectedMood],
+          stars: 3,
+          game: ACTIVITY[selectedMood]?.name ?? "",
+          world: "Teen Mode",
+          dayLabel: DAY_LABELS[now.getDay()],
+          playedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
+      } catch (err) {
+        console.error("Teen session insert failed:", err);
+        setSessionSaveError("Session could not be saved");
+      }
     }
     setSessionCount(n => n + 1);
     setScreen("done");
@@ -395,8 +401,14 @@ export default function TeenMode({ childId }) {
                 Check-in complete
               </h2>
               <p style={{ fontSize: "0.85rem", color: "#64748B", marginBottom: "2rem" }}>
-                Logged and saved. Good job showing up for yourself.
+                {sessionSaveError ? "Your check-in is complete, but saving needs attention." : "Logged and saved. Good job showing up for yourself."}
               </p>
+
+              {sessionSaveError && (
+                <div style={{ marginBottom: "1rem", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(248,113,113,0.5)", color: "#FCA5A5", borderRadius: "12px", padding: "10px 12px", fontWeight: 700, fontSize: "0.86rem" }}>
+                  {sessionSaveError}
+                </div>
+              )}
 
               <div style={{ ...card, padding: "16px", marginBottom: "2rem" }}>
                 <div style={{ fontSize: "0.72rem", color: "#64748B", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "1px" }}>

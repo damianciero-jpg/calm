@@ -1,37 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { waitForFirebaseUser, SignInRequired } from '@/lib/browser-auth'
+import { SignInRequired } from '@/lib/browser-auth'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import CalmPathApp from '@/components/calmpath-full'
 
 export default function PatientsPage() {
-  const [loading, setLoading] = useState(true)
-  const [authMissing, setAuthMissing] = useState(false)
+  const { user, loading } = useFirebaseUser()
 
-  useEffect(() => {
-    let active = true
-
-    async function loadSession() {
-      try {
-        const user = await waitForFirebaseUser('Patients session lookup')
-        if (active && !user) setAuthMissing(true)
-      } catch (err) {
-        console.error('Patients session lookup failed', err)
-        if (active) setAuthMissing(true)
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    loadSession()
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  if (loading) return null
-  if (authMissing) return <SignInRequired />
+  if (loading) return <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", color: '#64748B' }}>Loading...</div>
+  if (!user) return <SignInRequired />
 
   return <CalmPathApp />
 }

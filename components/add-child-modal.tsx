@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import type React from 'react'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import type { Child } from '@/types/database'
 
 const AVATARS = [
@@ -70,6 +71,7 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
   const [selected, setSelected] = useState(AVATARS[0])
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   const isOnboarding = !onCancel
 
@@ -79,7 +81,10 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
     setError(null)
 
     try {
-      const user = getFirebaseAuth().currentUser
+      if (authLoading) {
+        setError('Checking sign in. Try again in a moment.')
+        return
+      }
 
       if (!user) {
         setError('Session expired. Please sign in again.')

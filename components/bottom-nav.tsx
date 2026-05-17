@@ -4,8 +4,8 @@ import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, where } from 'firebase/firestore'
-import { onAuthStateChanged } from 'firebase/auth'
-import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
+import { getFirebaseDb } from '@/lib/firebase'
+import { useFirebaseUser } from '@/lib/useFirebaseUser'
 
 const AUTH_PATHS = new Set(['/login', '/signup'])
 
@@ -23,34 +23,38 @@ function BottomNavContent() {
   const urlChildId   = searchParams.get('childId')
 
   const [role,         setRole]         = useState<string | null>(null)
-  const [uid,          setUid]          = useState<string | null>(null)
-  const [firstChildId, setFirstChildId] = useState<string | null>(null)
+  const [firstChildHref, setFirstChildHref] = useState<string | null>(null)
   const [unread,       setUnread]       = useState(0)
+  const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
-    const auth = getFirebaseAuth()
     const db = getFirebaseDb()
     let unsubscribeNotifications: (() => void) | null = null
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async user => {
-      if (!user) {
-        setRole(null); setUid(null); setFirstChildId(null); setUnread(0)
-        if (unsubscribeNotifications) { unsubscribeNotifications(); unsubscribeNotifications = null }
-        return
-      }
+    if (authLoading) return () => undefined
+    if (!user) {
+      setRole(null); setFirstChildHref(null); setUnread(0)
+      return () => undefined
+    }
+    const uid = user.uid
 
-      const profileSnap = await getDoc(doc(db, 'users', user.uid))
+    async function loadNav() {
+      const profileSnap = await getDoc(doc(db, 'users', uid))
       const r = profileSnap.exists() && typeof profileSnap.data().role === 'string'
         ? profileSnap.data().role
         : 'parent'
-      const uid = user.uid
       setRole(r)
-      setUid(uid)
 
-      if (r === 'parent' && !firstChildId) {
+      if (r === 'parent') {
         const childrenSnap = await getDocs(query(collection(db, 'children'), where('parentId', '==', uid), limit(1)))
         const first = childrenSnap.docs[0]
-        if (first) setFirstChildId(first.id)
+        if (first) {
+          const data = first.data()
+          const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
+          setFirstChildHref(age >= 13 ? `/play-teen?childId=${first.id}` : `/play?childId=${first.id}`)
+        } else {
+          setFirstChildHref(null)
+        }
       }
 
       if (unsubscribeNotifications) unsubscribeNotifications()
@@ -58,19 +62,25 @@ function BottomNavContent() {
         query(collection(db, 'notifications'), where('recipientId', '==', uid), where('read', '==', false)),
         snapshot => setUnread(snapshot.size)
       )
+    }
+
+    loadNav().catch(err => {
+      console.error('Bottom nav load failed', err)
+      setRole(null)
+      setFirstChildHref(null)
+      setUnread(0)
     })
 
     return () => {
-      unsubscribeAuth()
       if (unsubscribeNotifications) unsubscribeNotifications()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [user, authLoading])
 
-  if (AUTH_PATHS.has(pathname) || !role) return null
+  if (AUTH_PATHS.has(pathname) || authLoading || !role) return null
 
   const homeHref = role === 'therapist' ? '/patients' : '/dashboard'
-  const playHref = urlChildId ? `/play?childId=${urlChildId}` : firstChildId ? `/play?childId=${firstChildId}` : '/play'
+  const playHref = urlChildId && pathname === '/play-teen' ? `/play-teen?childId=${urlChildId}` : urlChildId ? `/play?childId=${urlChildId}` : firstChildHref ?? '/play'
 
   const tabs: NavTab[] = [
     { id: 'home',     label: 'Home',     icon: '🏠', href: homeHref },

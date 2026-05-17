@@ -14,23 +14,34 @@ service cloud.firestore {
       return signedIn() && request.resource.data.parentId == request.auth.uid;
     }
 
+    function updatesOwnerByParentId() {
+      return signedIn()
+        && resource.data.parentId == request.auth.uid
+        && request.resource.data.parentId == request.auth.uid;
+    }
+
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
     match /children/{childId} {
-      allow read, update, delete: if isOwnerByParentId();
       allow create: if createsOwnerByParentId();
+      allow read, delete: if isOwnerByParentId();
+      allow update: if updatesOwnerByParentId();
     }
 
     match /sessions/{sessionId} {
-      allow read, update, delete: if isOwnerByParentId();
       allow create: if createsOwnerByParentId();
+      allow read, delete: if isOwnerByParentId();
+      allow update: if updatesOwnerByParentId();
     }
 
     match /notifications/{notificationId} {
-      allow read, update, delete: if signedIn() && resource.data.recipientId == request.auth.uid;
       allow create: if signedIn() && request.resource.data.recipientId == request.auth.uid;
+      allow read, delete: if signedIn() && resource.data.recipientId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.recipientId == request.auth.uid;
     }
   }
 }
