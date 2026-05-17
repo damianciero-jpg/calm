@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type React from 'react'
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
+import { collection, doc as firestoreDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore'
 import { onAuthStateChanged } from 'firebase/auth'
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 import { SignInRequired } from '@/lib/browser-auth'
@@ -13,15 +13,20 @@ import type { Child } from '@/types/database'
 type DashboardProps = { childId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
 const CalmPathDashboard = CalmPathDashboardRaw as unknown as React.ComponentType<DashboardProps>
 
+function getAutoGameMode(age: number | null | undefined) {
+  return (age ?? 0) >= 13 ? 'teen' : 'kids'
+}
+
 function mapChild(id: string, data: Record<string, unknown>): Child {
-  const gameMode = (data.gameMode ?? data.game_mode ?? 'kids') as string
+  const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
+  const gameMode = getAutoGameMode(age)
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
     parentId,
     parent_id: parentId,
     name: String(data.name ?? ''),
-    age: typeof data.age === 'number' ? data.age : Number(data.age ?? 0),
+    age,
     avatar: typeof data.avatar === 'string' ? data.avatar : '',
     color: typeof data.color === 'string' ? data.color : '#6366F1',
     gameMode,
@@ -58,7 +63,25 @@ export default function DashboardPage() {
             orderBy('createdAt')
           )
         )
-        const kids = snapshot.docs.map(doc => mapChild(doc.id, doc.data()))
+        const correctionWrites = snapshot.docs
+          .map(childDoc => {
+            const data = childDoc.data()
+            const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
+            const expectedMode = getAutoGameMode(age)
+            const currentMode = data.gameMode ?? data.game_mode
+            if (currentMode !== expectedMode) {
+              return updateDoc(firestoreDoc(db, 'children', childDoc.id), {
+                gameMode: expectedMode,
+                game_mode: expectedMode,
+              })
+            }
+            return null
+          })
+          .filter(Boolean)
+
+        await Promise.all(correctionWrites)
+
+        const kids = snapshot.docs.map(childDoc => mapChild(childDoc.id, childDoc.data()))
 
         if (active) {
           setChildren(kids)
@@ -92,8 +115,9 @@ export default function DashboardPage() {
   }, [])
 
   function handleAddSuccess(child: Child) {
-    setChildren(prev => [...prev, child])
-    setSelectedChild(child)
+    const normalizedChild = { ...child, gameMode: getAutoGameMode(child.age), game_mode: getAutoGameMode(child.age) }
+    setChildren(prev => [...prev, normalizedChild])
+    setSelectedChild(normalizedChild)
     setIsEmpty(false)
     setShowAddChild(false)
   }
@@ -148,7 +172,7 @@ export default function DashboardPage() {
         {children.map(child => (
           <button
             key={child.id}
-            onClick={() => setSelectedChild(child)}
+            onClick={() => setSelectedChild({ ...child, gameMode: getAutoGameMode(child.age), game_mode: getAutoGameMode(child.age) })}
             style={{
               padding: '6px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
               background: selectedChild.id === child.id ? child.color ?? '#6366F1' : '#F1F5F9',
@@ -158,7 +182,13 @@ export default function DashboardPage() {
               flexShrink: 0,
             }}
           >
-            <span>{child.avatar ?? ''}</span> {child.name}
+            <span>{child.avatar ?? ''}</span>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.1 }}>
+              <span>{child.name}</span>
+              <span style={{ fontSize: '0.58rem', opacity: 0.8, letterSpacing: '0.04em' }}>
+                {getAutoGameMode(child.age) === 'teen' ? 'TEEN MODE' : 'KIDS MODE'}
+              </span>
+            </span>
           </button>
         ))}
         <button
@@ -181,7 +211,7 @@ export default function DashboardPage() {
         childAge={selectedChild.age ?? 0}
         childAvatar={selectedChild.avatar ?? ''}
         childColor={selectedChild.color ?? '#6366F1'}
-        childGameMode={selectedChild.game_mode ?? 'kids'}
+        childGameMode={getAutoGameMode(selectedChild.age)}
       />
 
       {showAddChild && (

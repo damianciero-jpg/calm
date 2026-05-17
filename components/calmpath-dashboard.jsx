@@ -170,12 +170,11 @@ export default function CalmPathDashboard({
   childAge     = null,
   childAvatar  = "👦",
   childColor   = "#6366F1",
-  childGameMode = "kids",
 }) {
+  const effectiveGameMode = childAge >= 13 ? "teen" : "kids";
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
-  const [sessionsError, setSessionsError] = useState(null);
   const [aiInsights, setAiInsights] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -191,7 +190,6 @@ export default function CalmPathDashboard({
 
     async function loadSessions() {
       setSessionsLoading(true);
-      setSessionsError(null);
 
       try {
         const snapshot = await withTimeout(
@@ -209,7 +207,6 @@ export default function CalmPathDashboard({
         if (active) setSessions(snapshot.docs.map(doc => dbRowToSession({ id: doc.id, ...doc.data() })));
       } catch (err) {
         console.error("Dashboard sessions query failed", err);
-        if (active) setSessionsError(err instanceof Error ? err.message : "Unexpected sessions loading error");
       } finally {
         if (active) setSessionsLoading(false);
       }
@@ -326,6 +323,9 @@ export default function CalmPathDashboard({
                 <div style={{ fontSize: "0.72rem", color: "#94A3B8" }}>
                   This week · {sessionsLoading ? "…" : `${totalSessions} sessions`}
                 </div>
+                <div style={{ fontSize: "0.62rem", color: childColor, fontWeight: 800, letterSpacing: "0.08em", marginTop: "2px" }}>
+                  {effectiveGameMode === "teen" ? "TEEN MODE" : "KIDS MODE"}
+                </div>
               </div>
               <div style={{
                 width: "38px", height: "38px", borderRadius: "50%",
@@ -370,12 +370,6 @@ export default function CalmPathDashboard({
 
         {/* CONTENT */}
         <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem" }}>
-          {sessionsError && (
-            <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "14px", padding: "1rem 1.25rem", color: "#DC2626", fontSize: "0.9rem", lineHeight: 1.45, marginBottom: "1rem" }}>
-              {sessionsError}
-            </div>
-          )}
-
           {/* ── OVERVIEW TAB ── */}
           {tab === "overview" && (
             <div style={{ animation: "fadeUp 0.4s ease" }}>
@@ -385,12 +379,12 @@ export default function CalmPathDashboard({
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
                     <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: "1.1rem", color: "#0F172A" }}>Ready to play?</div>
-                    <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: childGameMode === "teen" ? "#1E1B4B" : `${childColor}22`, color: childGameMode === "teen" ? "#A5B4FC" : childColor }}>
-                      {childGameMode === "teen" ? "🌙 Teen Mode" : "🎮 Kids Mode"}
+                    <span style={{ fontSize: "0.7rem", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: effectiveGameMode === "teen" ? "#1E1B4B" : `${childColor}22`, color: effectiveGameMode === "teen" ? "#A5B4FC" : childColor }}>
+                      {effectiveGameMode === "teen" ? "🌙 Teen Mode" : "🎮 Kids Mode"}
                     </span>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "#64748B" }}>
-                    {childGameMode === "teen"
+                    {effectiveGameMode === "teen"
                       ? `Launch ${childName}'s teen check-in — mindfulness and reflection.`
                       : `Launch MoodQuest for ${childName} — each session logs their mood automatically.`}
                     {" "}
@@ -398,10 +392,10 @@ export default function CalmPathDashboard({
                   </div>
                 </div>
                 <a
-                  href={childGameMode === "teen" ? `/play-teen?childId=${childId}` : `/play?childId=${childId}`}
-                  style={{ padding: "10px 22px", borderRadius: "12px", background: childGameMode === "teen" ? "#312E81" : childColor, color: "white", fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0 }}
+                  href={effectiveGameMode === "teen" ? `/play-teen?childId=${childId}` : `/play?childId=${childId}`}
+                  style={{ padding: "10px 22px", borderRadius: "12px", background: effectiveGameMode === "teen" ? "#312E81" : childColor, color: "white", fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
-                  {childGameMode === "teen" ? "Start Check-in 🌙" : "Play MoodQuest 🎮"}
+                  {effectiveGameMode === "teen" ? "Start Check-in 🌙" : "Play MoodQuest 🎮"}
                 </a>
               </div>
 

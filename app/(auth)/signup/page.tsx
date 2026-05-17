@@ -25,6 +25,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ])
 }
 
+function getAutoGameMode(age: number) {
+  return age >= 13 ? 'teen' : 'kids'
+}
+
 function getAuthErrorMessage(err: unknown) {
   const code = typeof err === 'object' && err && 'code' in err ? err.code : null
 
@@ -118,16 +122,18 @@ export default function SignupPage() {
       }
 
       if (role === 'parent') {
+        const age = Number(childAge)
+        const gameMode = getAutoGameMode(age)
         setStatus('Creating child profile...')
         try {
           await withTimeout(
             addDoc(collection(db, 'children'), {
               parentId: user.uid,
               name: childName.trim(),
-              age: Number(childAge),
+              age,
               avatar: selectedAvatar.emoji,
               color: selectedAvatar.color,
-              gameMode: 'kids',
+              gameMode,
               createdAt: serverTimestamp(),
             }),
             15_000,

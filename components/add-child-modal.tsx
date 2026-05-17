@@ -6,14 +6,13 @@ import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 import type { Child } from '@/types/database'
 
-// Same 6 mood emojis and colors as moodquest.jsx
 const AVATARS = [
-  { emoji: '😄', color: '#FFD93D' },
-  { emoji: '😌', color: '#6BCB77' },
-  { emoji: '😟', color: '#74B9FF' },
-  { emoji: '😠', color: '#FF6B6B' },
-  { emoji: '😢', color: '#A29BFE' },
-  { emoji: '😴', color: '#FDCB6E' },
+  { emoji: '⭐', color: '#FFD93D' },
+  { emoji: '🌿', color: '#6BCB77' },
+  { emoji: '🌊', color: '#74B9FF' },
+  { emoji: '🔥', color: '#FF6B6B' },
+  { emoji: '💜', color: '#A29BFE' },
+  { emoji: '🌙', color: '#FDCB6E' },
 ]
 
 const inputStyle: React.CSSProperties = {
@@ -56,6 +55,10 @@ function getChildSaveErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : 'Unexpected child profile error'
 }
 
+function getAutoGameMode(age: number) {
+  return age >= 13 ? 'teen' : 'kids'
+}
+
 interface Props {
   onSuccess: (child: Child) => void
   onCancel?: () => void
@@ -84,15 +87,17 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
       }
 
       const db = getFirebaseDb()
+      const parsedAge = parseInt(age, 10)
+      const gameMode = getAutoGameMode(parsedAge)
       const child = {
         parentId: user.uid,
         parent_id: user.uid,
         name: name.trim(),
-        age: parseInt(age, 10),
+        age: parsedAge,
         avatar: selected.emoji,
         color: selected.color,
-        gameMode: 'kids',
-        game_mode: 'kids',
+        gameMode,
+        game_mode: gameMode,
         createdAt: serverTimestamp(),
       }
       const ref = await withTimeout(
