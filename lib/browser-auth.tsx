@@ -56,7 +56,7 @@ export function waitForFirebaseUser(label: string): Promise<User | null> {
   )
 }
 
-export function SignInRequired({ message = 'Please sign in' }: { message?: string }) {
+export function SignInRequired({ message = 'Sign In Required' }: { message?: string }) {
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>

@@ -2,11 +2,25 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { signInWithEmailAndPassword } from 'firebase/auth'
+import type { Auth, User } from 'firebase/auth'
+import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth'
 import { assertFirebaseEnv, getFirebaseAuth } from '@/lib/firebase'
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function waitForFirebaseUser(auth: Auth, timeoutMs = 5000) {
+  return new Promise<User>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsubscribe()
+      reject(new Error('Login succeeded, but Firebase user did not hydrate in time.'))
+    }, timeoutMs)
+
+    const unsubscribe = onAuthStateChanged(auth, user => {
+      if (user) {
+        clearTimeout(timeout)
+        unsubscribe()
+        resolve(user)
+      }
+    })
+  })
 }
 
 function getAuthErrorMessage(err: unknown) {
@@ -37,10 +51,10 @@ export default function LoginPage() {
         email.trim(),
         password,
       )
-      await sleep(300)
+      await waitForFirebaseUser(auth, 5000)
       console.log('Login successful, navigating to dashboard')
       navigationStarted = true
-      window.location.assign('/dashboard')
+      window.location.replace('/dashboard')
     } catch (err) {
       console.error('Login failed:', err)
       setError(getAuthErrorMessage(err))

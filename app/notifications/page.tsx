@@ -128,7 +128,7 @@ export default function NotificationsPage() {
 
   const unreadCount = notifs.filter(n => !n.read).length
 
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", color: '#64748B' }}>Loading...</div>
     )

@@ -94,7 +94,7 @@ function PlayTeenContent() {
   }, [router, childIdParam, user, authLoading])
 
   if (authLoading || loading) return <FullPageLoader />
-  if (authMissing) return <SignInRequired />
+  if (!user || authMissing) return <SignInRequired />
   if (!selectedChild) return null
   return <TeenMode childId={selectedChild.id} parentId={user?.uid} />
 }
@@ -108,7 +108,7 @@ function FullPageLoader() {
         background: 'linear-gradient(160deg,#0F172A 0%,#1E293B 60%,#0F172A 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ fontSize: '3rem', animation: 'bounce 1.2s ease-in-out infinite' }}>🧠</div>
+        <div style={{ color: '#CBD5E1', fontFamily: "'Outfit', sans-serif", fontSize: '0.95rem' }}>Loading...</div>
       </div>
     </>
   )

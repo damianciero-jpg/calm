@@ -103,7 +103,7 @@ function PlayPageContent() {
   }, [router, childIdParam, user, authLoading])
 
   if (authLoading || loading) return <FullPageLoader />
-  if (authMissing)   return <SignInRequired />
+  if (!user || authMissing) return <SignInRequired />
   if (selectedChild && user) return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
   return <ChildSelector children={children} onSelect={child => {
     if ((child.age ?? 0) >= 13) router.push(`/play-teen?childId=${child.id}`)
@@ -122,7 +122,7 @@ function FullPageLoader() {
         background: 'linear-gradient(160deg,#F7F3FF 0%,#EBF5FF 50%,#F0FFF4 100%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <div style={{ fontSize: '3rem', animation: 'bounce 1.2s ease-in-out infinite' }}>🗺️</div>
+        <div style={{ color: '#64748B', fontFamily: "'Nunito',sans-serif", fontSize: '0.95rem' }}>Loading...</div>
       </div>
     </>
   )
