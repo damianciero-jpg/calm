@@ -347,6 +347,8 @@ export default function MoodQuest({ childId, parentId }) {
   const [earnedBadge, setEarnedBadge] = useState(null);
   const [sessionLog, setSessionLog] = useState([]);
   const [sessionSaveError, setSessionSaveError] = useState(null);
+  const [sessionSaveStatus, setSessionSaveStatus] = useState(null);
+  const sessionSaveStartedRef = useRef(false);
 
   // Load real star total from DB for this child
   useEffect(() => {
@@ -363,6 +365,9 @@ export default function MoodQuest({ childId, parentId }) {
   const game = selectedMood ? MINI_GAMES[selectedMood] : null;
 
   const handleMoodSelect = (id) => {
+    sessionSaveStartedRef.current = false;
+    setSessionSaveError(null);
+    setSessionSaveStatus(null);
     setSelectedMood(id);
     setScreen("world");
   };
@@ -370,6 +375,9 @@ export default function MoodQuest({ childId, parentId }) {
   const handlePlayGame = () => setScreen("game");
 
   const handleGameComplete = async (stars) => {
+    if (sessionSaveStartedRef.current) return;
+    sessionSaveStartedRef.current = true;
+
     setGameStars(stars);
     setTotalStars((s) => s + stars);
     const badge = REWARDS[Math.floor(Math.random() * REWARDS.length)];
@@ -386,25 +394,35 @@ export default function MoodQuest({ childId, parentId }) {
       const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       try {
         setSessionSaveError(null);
+        setSessionSaveStatus("Saving session...");
         await addDoc(collection(db, "sessions"), {
-          childId,
           parentId,
+          childId,
           mood: selectedMood,
           stars,
           game: MINI_GAMES[selectedMood]?.name ?? "",
           world: MOODS.find((m) => m.id === selectedMood)?.world ?? "",
-          playedAt: serverTimestamp(),
           dayLabel: DAY_LABELS[now.getDay()],
+          playedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
         });
+        setSessionSaveStatus("Session saved");
+        window.setTimeout(() => {
+          window.location.replace("/dashboard");
+        }, 700);
       } catch (err) {
         console.error("Session insert failed:", err);
         setSessionSaveError("Session could not be saved");
+        setSessionSaveStatus(null);
+        sessionSaveStartedRef.current = false;
       }
     }
   };
 
   const handlePlayAgain = () => {
+    sessionSaveStartedRef.current = false;
+    setSessionSaveError(null);
+    setSessionSaveStatus(null);
     setSelectedMood(null);
     setScreen("mood");
   };
@@ -678,6 +696,11 @@ export default function MoodQuest({ childId, parentId }) {
             {sessionSaveError && (
               <div style={{ marginBottom: "1rem", background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626", borderRadius: "12px", padding: "10px 12px", fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: "0.86rem" }}>
                 {sessionSaveError}
+              </div>
+            )}
+            {sessionSaveStatus && (
+              <div style={{ marginBottom: "1rem", background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#16A34A", borderRadius: "12px", padding: "10px 12px", fontFamily: "'Nunito', sans-serif", fontWeight: 800, fontSize: "0.86rem" }}>
+                {sessionSaveStatus}
               </div>
             )}
 

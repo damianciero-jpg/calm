@@ -230,6 +230,8 @@ export default function TeenMode({ childId, parentId }) {
   const [selectedMood, setSelectedMood] = useState(null);
   const [sessionCount, setSessionCount] = useState(0);
   const [sessionSaveError, setSessionSaveError] = useState(null);
+  const [sessionSaveStatus, setSessionSaveStatus] = useState(null);
+  const sessionSaveStartedRef = useRef(false);
 
   useEffect(() => {
     if (!childId || !parentId) return;
@@ -243,16 +245,23 @@ export default function TeenMode({ childId, parentId }) {
   const activity = selectedMood ? ACTIVITY[selectedMood] : null;
 
   function selectMood(id) {
+    sessionSaveStartedRef.current = false;
+    setSessionSaveError(null);
+    setSessionSaveStatus(null);
     setSelectedMood(id);
     setScreen("activity");
   }
 
   async function handleComplete() {
+    if (sessionSaveStartedRef.current) return;
+    sessionSaveStartedRef.current = true;
+
     if (childId && parentId && selectedMood) {
       const db = getFirebaseDb();
       const now = new Date();
       try {
         setSessionSaveError(null);
+        setSessionSaveStatus("Saving session...");
         await addDoc(collection(db, "sessions"), {
           parentId,
           childId,
@@ -264,12 +273,21 @@ export default function TeenMode({ childId, parentId }) {
           playedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
         });
+        setSessionSaveStatus("Session saved");
+        setSessionCount(n => n + 1);
+        setScreen("done");
+        window.setTimeout(() => {
+          window.location.replace("/dashboard");
+        }, 700);
       } catch (err) {
         console.error("Teen session insert failed:", err);
         setSessionSaveError("Session could not be saved");
+        setSessionSaveStatus(null);
+        sessionSaveStartedRef.current = false;
+        setScreen("done");
       }
+      return;
     }
-    setSessionCount(n => n + 1);
     setScreen("done");
   }
 
@@ -407,6 +425,11 @@ export default function TeenMode({ childId, parentId }) {
               {sessionSaveError && (
                 <div style={{ marginBottom: "1rem", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(248,113,113,0.5)", color: "#FCA5A5", borderRadius: "12px", padding: "10px 12px", fontWeight: 700, fontSize: "0.86rem" }}>
                   {sessionSaveError}
+                </div>
+              )}
+              {sessionSaveStatus && (
+                <div style={{ marginBottom: "1rem", background: "rgba(22,163,74,0.14)", border: "1px solid rgba(74,222,128,0.5)", color: "#86EFAC", borderRadius: "12px", padding: "10px 12px", fontWeight: 700, fontSize: "0.86rem" }}>
+                  {sessionSaveStatus}
                 </div>
               )}
 

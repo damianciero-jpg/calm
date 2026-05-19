@@ -198,7 +198,7 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
             opacity: saving || !name.trim() || !age ? 0.6 : 1, transition: 'opacity 0.15s',
           }}
         >
-          {saving ? 'Saving…' : 'Add child'}
+          {saving ? 'Saving...' : 'Add child'}
         </button>
 
         {onCancel && (

@@ -166,13 +166,13 @@ export default function SignupPage() {
         <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;600;700&display=swap');`}</style>
         <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
           <div style={{ width: '100%', maxWidth: '400px', background: 'white', borderRadius: '20px', padding: '2.5rem', boxShadow: '0 4px 24px rgba(15,23,42,0.08)', textAlign: 'center' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>ðŸ“¬</div>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📬</div>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.3rem', color: '#0F172A', marginBottom: '0.75rem' }}>Check your email</div>
             <div style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: 1.6 }}>
               We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account and sign in.
             </div>
             <Link href="/login" style={{ display: 'block', marginTop: '1.5rem', color: '#6366F1', fontWeight: 600, textDecoration: 'none', fontSize: '0.88rem' }}>
-              â† Back to login
+              Back to login
             </Link>
           </div>
         </div>
@@ -202,7 +202,7 @@ export default function SignupPage() {
           {/* Brand */}
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
             <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 12px' }}>
-              ðŸ§©
+              🧩
             </div>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.75rem', color: '#0F172A', lineHeight: 1 }}>Viada</div>
             <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>AI-Powered Autism Support</div>
@@ -218,15 +218,15 @@ export default function SignupPage() {
 
               {/* Role selector */}
               <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>I am aâ€¦</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '8px' }}>I am a...</label>
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button type="button" className={`role-card${role === 'parent' ? ' active' : ''}`} onClick={() => setRole('parent')}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>ðŸ‘¨â€ðŸ‘©â€ðŸ‘§</div>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>👨‍👩‍👧</div>
                     <div style={{ fontSize: '0.85rem', fontWeight: 700, color: role === 'parent' ? '#4F46E5' : '#374151' }}>Parent</div>
                     <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>Track my child</div>
                   </button>
                   <button type="button" className={`role-card${role === 'therapist' ? ' active' : ''}`} onClick={() => setRole('therapist')}>
-                    <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>ðŸ©º</div>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>🩺</div>
                     <div style={{ fontSize: '0.85rem', fontWeight: 700, color: role === 'therapist' ? '#4F46E5' : '#374151' }}>Therapist</div>
                     <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>Manage patients</div>
                   </button>

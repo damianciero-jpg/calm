@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -285,7 +285,7 @@ export default function SettingsPage() {
                             cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
                             transition: 'all 0.15s',
                           }}
-                        >ðŸŽ® Kids</button>
+                        >🎮 Kids</button>
                         <button
                           onClick={() => updateGameMode(child.id, 'teen')}
                           style={{
@@ -295,7 +295,7 @@ export default function SettingsPage() {
                             cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
                             transition: 'all 0.15s',
                           }}
-                        >ðŸŒ™ Teen</button>
+                        >🌙 Teen</button>
                       </div>
                     </div>
                   ))
@@ -317,8 +317,8 @@ export default function SettingsPage() {
           {/* Notification preferences placeholder */}
           <Section title="Notifications">
             <div style={{ fontSize: '0.85rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>ðŸ””</span>
-              <span>Notification preferences â€” coming soon.</span>
+              <span>🔔</span>
+              <span>Notification preferences - coming soon.</span>
             </div>
           </Section>
 
@@ -333,7 +333,7 @@ export default function SettingsPage() {
               opacity: signingOut ? 0.6 : 1, transition: 'all 0.15s',
             }}
           >
-            {signingOut ? 'Signing outâ€¦' : 'Sign out'}
+            {signingOut ? 'Signing out...' : 'Sign out'}
           </button>
 
         </div>

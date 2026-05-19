@@ -37,6 +37,17 @@ function timeAgo(iso: string) {
   return `${d}d ago`
 }
 
+function getNotificationsErrorMessage(err: unknown) {
+  const code = typeof err === 'object' && err && 'code' in err ? String(err.code) : ''
+  const message = err instanceof Error ? err.message : ''
+
+  if (code === 'failed-precondition' && message.toLowerCase().includes('index')) {
+    return 'Alerts are still being prepared. Firebase is building the required index. Try again in a few minutes.'
+  }
+
+  return 'Notifications could not load'
+}
+
 export default function NotificationsPage() {
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState<string | null>(null)
@@ -89,7 +100,7 @@ export default function NotificationsPage() {
         if (active) setNotifs(rows)
       } catch (err) {
         console.error('Notifications load failed', err)
-        if (active) setError(err instanceof Error ? err.message : 'Notifications could not load')
+        if (active) setError(getNotificationsErrorMessage(err))
       } finally {
         if (active) setLoading(false)
       }
