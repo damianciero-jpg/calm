@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -96,6 +96,10 @@ function dbRowToSession(s) {
     world: s.world ?? "",
     time:  playedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
+}
+
+function getSessionPlayedAt(session) {
+  return session.playedAt?.toDate ? session.playedAt.toDate() : new Date(session.playedAt ?? session.createdAt ?? Date.now());
 }
 
 function StatCard({ icon, label, value, sub, color, delay }) {
@@ -197,16 +201,19 @@ export default function CalmPathDashboard({
           getDocs(
             query(
               collection(db, "sessions"),
-              where("childId", "==", childId),
-              where("parentId", "==", parentId),
-              where("playedAt", ">=", weekAgo),
-              orderBy("playedAt", "asc")
+              where("parentId", "==", parentId)
             )
           ),
           "Dashboard sessions query"
         );
 
-        if (active) setSessions(snapshot.docs.map(doc => dbRowToSession({ id: doc.id, ...doc.data() })));
+        const rows = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(session => session.childId === childId && getSessionPlayedAt(session) >= weekAgo)
+          .sort((a, b) => getSessionPlayedAt(a).getTime() - getSessionPlayedAt(b).getTime())
+          .map(dbRowToSession);
+
+        if (active) setSessions(rows);
       } catch (err) {
         console.error("Dashboard sessions query failed", err);
       } finally {

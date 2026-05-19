@@ -236,8 +236,8 @@ export default function TeenMode({ childId, parentId }) {
   useEffect(() => {
     if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("childId", "==", childId), where("parentId", "==", parentId)))
-      .then((snapshot) => setSessionCount(snapshot.size))
+    getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId)))
+      .then((snapshot) => setSessionCount(snapshot.docs.filter(doc => doc.data().childId === childId).length))
       .catch((err) => console.error("Teen sessions query failed:", err));
   }, [childId, parentId]);
 

@@ -354,9 +354,12 @@ export default function MoodQuest({ childId, parentId }) {
   useEffect(() => {
     if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("childId", "==", childId), where("parentId", "==", parentId)))
+    getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId)))
       .then((snapshot) => {
-        setTotalStars(snapshot.docs.reduce((a, doc) => a + (Number(doc.data().stars) || 0), 0));
+        setTotalStars(snapshot.docs.reduce((a, doc) => {
+          const data = doc.data();
+          return data.childId === childId ? a + (Number(data.stars) || 0) : a;
+        }, 0));
       })
       .catch((err) => console.error("Session stars query failed:", err));
   }, [childId, parentId]);
