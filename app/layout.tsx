@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Viada — AI-Powered Autism Support",
-  description: "Bridging the gap between a child's emotional world and their caregiving team.",
+  title: "Viada - Neurodivergent Support",
+  description: "Support for neurodivergent kids, teens, and families through emotional wellness and caregiving tools.",
 };
 
 export default function RootLayout({

@@ -226,7 +226,7 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
             <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
               <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: 'linear-gradient(135deg,#6366F1,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 12px' }}>🧩</div>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.75rem', color: '#0F172A', lineHeight: 1 }}>Viada</div>
-              <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>AI-Powered Autism Support</div>
+              <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Support for Neurodivergent Kids, Teens & Families</div>
             </div>
             {card}
           </div>

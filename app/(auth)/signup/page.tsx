@@ -205,7 +205,7 @@ export default function SignupPage() {
               🧩
             </div>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.75rem', color: '#0F172A', lineHeight: 1 }}>Viada</div>
-            <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>AI-Powered Autism Support</div>
+            <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Support for Neurodivergent Kids, Teens & Families</div>
           </div>
 
           {/* Card */}

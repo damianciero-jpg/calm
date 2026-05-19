@@ -86,7 +86,7 @@ export default function LoginPage() {
               🧩
             </div>
             <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.75rem', color: '#0F172A', lineHeight: 1 }}>Viada</div>
-            <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>AI-Powered Autism Support</div>
+            <div style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '4px' }}>Support for Neurodivergent Kids, Teens & Families</div>
           </div>
 
           <div style={{ background: 'white', borderRadius: '20px', padding: '2rem', boxShadow: '0 4px 24px rgba(15,23,42,0.08)' }}>

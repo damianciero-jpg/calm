@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     if (mode === 'therapist') {
       const summary = sessions.map(s => `${s.date} ${s.time}: ${s.mood}, ${s.stars} stars`).join('; ')
-      prompt = `You are a child behavioral therapist assistant analyzing a week of app data for a child with autism.
+      prompt = `You are a child behavioral therapist assistant analyzing a week of emotional wellness app data for a neurodivergent child or teen.
 
 Child: ${childName}, age ${childAge}
 Session data: ${summary}
@@ -38,7 +38,7 @@ Return ONLY a JSON object (no markdown) with:
       const summary = sessions
         .map(s => `${s.date} ${s.time}: mood=${s.mood}, stars=${s.stars}, game=${s.game ?? ''}`)
         .join('\n')
-      prompt = `You are a compassionate child behavior analyst helping parents of children with autism understand their child's emotional patterns.
+      prompt = `You are a compassionate child behavior analyst helping parents of neurodivergent kids and teens understand emotional wellness patterns.
 
 Here is one week of mood and game data from the child's MoodQuest app:
 
