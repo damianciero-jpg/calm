@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { SignInRequired } from '@/lib/browser-auth'
+import { CHILD_ID_KEY, isChildModeActive } from '@/lib/child-pin'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import TeenMode from '@/components/teenmode'
@@ -59,7 +60,10 @@ function PlayTeenContent() {
         const kids = snapshot.docs.map(doc => mapChild(doc.id, doc.data()))
 
         let target: Child | null = null
-        if (childIdParam) {
+        const childModeId = isChildModeActive() ? localStorage.getItem(CHILD_ID_KEY) : null
+        if (childModeId) {
+          target = kids.find(k => k.id === childModeId) ?? null
+        } else if (childIdParam) {
           target = kids.find(k => k.id === childIdParam) ?? null
         } else if (kids.length === 1) {
           target = kids[0]

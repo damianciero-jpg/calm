@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
 import { signOut as firebaseSignOut, updateProfile } from 'firebase/auth'
 import { SignInRequired } from '@/lib/browser-auth'
+import { hashChildPin, isChildModeActive, isValidChildPin } from '@/lib/child-pin'
 import { getFirebaseAuth, getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import AddChildModal from '@/components/add-child-modal'
@@ -64,11 +65,19 @@ export default function SettingsPage() {
   const [children,     setChildren]     = useState<Child[]>([])
   const [showAddChild, setShowAddChild] = useState(false)
   const [gameModes,    setGameModes]    = useState<Record<string, 'kids' | 'teen'>>({})
+  const [childPins,    setChildPins]    = useState<Record<string, string>>({})
+  const [pinSaving,    setPinSaving]    = useState<string | null>(null)
+  const [pinMessage,   setPinMessage]   = useState<Record<string, string>>({})
 
   const [signingOut,   setSigningOut]   = useState(false)
   const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
+    if (isChildModeActive()) {
+      window.location.replace('/play/select')
+      return
+    }
+
     let active = true
     const db = getFirebaseDb()
 
@@ -177,6 +186,30 @@ export default function SettingsPage() {
     await updateDoc(doc(db, 'children', childId), { gameMode: mode })
   }
 
+  async function updateChildPin(childId: string) {
+    if (!user) return
+    const pin = childPins[childId] ?? ''
+    if (!isValidChildPin(pin)) {
+      setPinMessage(prev => ({ ...prev, [childId]: 'PIN must be 4 digits.' }))
+      return
+    }
+
+    setPinSaving(childId)
+    setPinMessage(prev => ({ ...prev, [childId]: '' }))
+    try {
+      const childPinHash = await hashChildPin(pin, user.uid)
+      const db = getFirebaseDb()
+      await updateDoc(doc(db, 'children', childId), { childPinHash, child_pin_hash: childPinHash })
+      setChildPins(prev => ({ ...prev, [childId]: '' }))
+      setPinMessage(prev => ({ ...prev, [childId]: 'PIN saved' }))
+    } catch (err) {
+      console.error('Child PIN save failed', err)
+      setPinMessage(prev => ({ ...prev, [childId]: 'PIN could not be saved' }))
+    } finally {
+      setPinSaving(null)
+    }
+  }
+
   if (authLoading || loading) return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", color: '#64748B' }}>Loading...</div>
   )
@@ -267,40 +300,66 @@ export default function SettingsPage() {
                   <div style={{ fontSize: '0.85rem', color: '#94A3B8', textAlign: 'center', padding: '1rem 0' }}>No children yet.</div>
                 ) : (
                   children.map(child => (
-                    <div key={child.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', background: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                      <div style={{
-                        width: '38px', height: '38px', borderRadius: '50%',
-                        background: `${child.color ?? '#6366F1'}18`, border: `2px solid ${child.color ?? '#6366F1'}55`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0,
-                      }}>
-                        {child.avatar ?? ''}
+                    <div key={child.id} style={{ display: 'grid', gap: '10px', padding: '10px 12px', background: '#F8FAFC', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '38px', height: '38px', borderRadius: '50%',
+                          background: `${child.color ?? '#6366F1'}18`, border: `2px solid ${child.color ?? '#6366F1'}55`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0,
+                        }}>
+                          {child.avatar ?? ''}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.9rem' }}>{child.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Age {child.age ?? '-'}</div>
+                        </div>
+                        <div style={{ display: 'flex', borderRadius: '20px', overflow: 'hidden', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                          <button
+                            onClick={() => updateGameMode(child.id, 'kids')}
+                            style={{
+                              padding: '5px 10px', border: 'none',
+                              background: (gameModes[child.id] ?? 'kids') === 'kids' ? '#6366F1' : '#F1F5F9',
+                              color: (gameModes[child.id] ?? 'kids') === 'kids' ? 'white' : '#64748B',
+                              cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
+                              transition: 'all 0.15s',
+                            }}
+                          >🎮 Kids</button>
+                          <button
+                            onClick={() => updateGameMode(child.id, 'teen')}
+                            style={{
+                              padding: '5px 10px', border: 'none',
+                              background: (gameModes[child.id] ?? 'kids') === 'teen' ? '#6366F1' : '#F1F5F9',
+                              color: (gameModes[child.id] ?? 'kids') === 'teen' ? 'white' : '#64748B',
+                              cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
+                              transition: 'all 0.15s',
+                            }}
+                          >🌙 Teen</button>
+                        </div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.9rem' }}>{child.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>Age {child.age ?? '-'}</div>
-                      </div>
-                      <div style={{ display: 'flex', borderRadius: '20px', overflow: 'hidden', border: '1px solid #E2E8F0', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          placeholder="Child PIN"
+                          value={childPins[child.id] ?? ''}
+                          onChange={e => setChildPins(prev => ({ ...prev, [child.id]: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                          style={{ ...inputStyle, padding: '8px 10px', fontSize: '0.82rem' }}
+                        />
                         <button
-                          onClick={() => updateGameMode(child.id, 'kids')}
-                          style={{
-                            padding: '5px 10px', border: 'none',
-                            background: (gameModes[child.id] ?? 'kids') === 'kids' ? '#6366F1' : '#F1F5F9',
-                            color: (gameModes[child.id] ?? 'kids') === 'kids' ? 'white' : '#64748B',
-                            cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
-                            transition: 'all 0.15s',
-                          }}
-                        >🎮 Kids</button>
-                        <button
-                          onClick={() => updateGameMode(child.id, 'teen')}
-                          style={{
-                            padding: '5px 10px', border: 'none',
-                            background: (gameModes[child.id] ?? 'kids') === 'teen' ? '#6366F1' : '#F1F5F9',
-                            color: (gameModes[child.id] ?? 'kids') === 'teen' ? 'white' : '#64748B',
-                            cursor: 'pointer', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.72rem',
-                            transition: 'all 0.15s',
-                          }}
-                        >🌙 Teen</button>
+                          type="button"
+                          onClick={() => updateChildPin(child.id)}
+                          disabled={pinSaving === child.id}
+                          style={{ padding: '8px 10px', border: 'none', borderRadius: '9px', background: '#6366F1', color: 'white', fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                          {pinSaving === child.id ? 'Saving...' : 'Save PIN'}
+                        </button>
                       </div>
+                      {pinMessage[child.id] && (
+                        <div style={{ fontSize: '0.76rem', color: pinMessage[child.id] === 'PIN saved' ? '#16A34A' : '#DC2626', fontWeight: 700 }}>
+                          {pinMessage[child.id]}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

@@ -21,6 +21,8 @@ export interface Child {
   color: string | null
   gameMode: GameMode | string | null
   game_mode?: GameMode | string | null
+  childPinHash?: string | null
+  child_pin_hash?: string | null
   createdAt?: unknown
 }
 

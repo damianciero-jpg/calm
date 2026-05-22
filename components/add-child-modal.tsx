@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { hashChildPin, isValidChildPin } from '@/lib/child-pin'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import type { Child } from '@/types/database'
@@ -68,6 +69,7 @@ interface Props {
 export default function AddChildModal({ onSuccess, onCancel }: Props) {
   const [name, setName]         = useState('')
   const [age, setAge]           = useState('')
+  const [pin, setPin]           = useState('')
   const [selected, setSelected] = useState(AVATARS[0])
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
@@ -93,7 +95,12 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
 
       const db = getFirebaseDb()
       const parsedAge = parseInt(age, 10)
+      if (!isValidChildPin(pin)) {
+        setError('Child PIN must be exactly 4 digits.')
+        return
+      }
       const gameMode = getAutoGameMode(parsedAge)
+      const childPinHash = await hashChildPin(pin, user.uid)
       const child = {
         parentId: user.uid,
         parent_id: user.uid,
@@ -103,6 +110,8 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
         color: selected.color,
         gameMode,
         game_mode: gameMode,
+        childPinHash,
+        child_pin_hash: childPinHash,
         createdAt: serverTimestamp(),
       }
       const ref = await withTimeout(
@@ -162,6 +171,22 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
           />
         </Field>
 
+        <Field label="Child PIN">
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="\d{4}"
+            maxLength={4}
+            placeholder="4 digits"
+            value={pin}
+            onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            required
+            style={inputStyle}
+            onFocus={e => { e.target.style.borderColor = '#6366F1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.12)' }}
+            onBlur={e => { e.target.style.borderColor = '#E2E8F0'; e.target.style.boxShadow = 'none' }}
+          />
+        </Field>
+
         <Field label="Avatar">
           <div style={{ display: 'flex', gap: '8px' }}>
             {AVATARS.map(a => (
@@ -190,12 +215,12 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
 
         <button
           type="submit"
-          disabled={saving || !name.trim() || !age}
+          disabled={saving || !name.trim() || !age || !isValidChildPin(pin)}
           style={{
             width: '100%', padding: '12px', background: '#6366F1', color: 'white', border: 'none',
             borderRadius: '10px', fontFamily: "'Outfit', sans-serif", fontWeight: 700,
-            fontSize: '0.95rem', cursor: saving || !name.trim() || !age ? 'default' : 'pointer',
-            opacity: saving || !name.trim() || !age ? 0.6 : 1, transition: 'opacity 0.15s',
+            fontSize: '0.95rem', cursor: saving || !name.trim() || !age || !isValidChildPin(pin) ? 'default' : 'pointer',
+            opacity: saving || !name.trim() || !age || !isValidChildPin(pin) ? 0.6 : 1, transition: 'opacity 0.15s',
           }}
         >
           {saving ? 'Saving...' : 'Add child'}

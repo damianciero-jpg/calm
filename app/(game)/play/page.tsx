@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
 import { SignInRequired } from '@/lib/browser-auth'
+import { CHILD_ID_KEY, isChildModeActive } from '@/lib/child-pin'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import SensoryMergeGame from '@/components/SensoryMergeGame'
@@ -72,6 +73,17 @@ function PlayPageContent() {
 
         const kids = snapshot.docs.map(doc => mapChild(doc.id, doc.data()))
         setChildren(kids)
+        const childModeId = isChildModeActive() ? localStorage.getItem(CHILD_ID_KEY) : null
+        if (childModeId) {
+          const match = kids.find(k => k.id === childModeId)
+          if (match) {
+            setSelectedChild(match)
+            return
+          }
+          window.location.replace('/play/select')
+          return
+        }
+
         if (childIdParam) {
           const match = kids.find(k => k.id === childIdParam)
           if (match) {

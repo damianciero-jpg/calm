@@ -8,6 +8,7 @@ import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import { SignInRequired } from '@/lib/browser-auth'
 import CalmPathDashboardRaw from '@/components/calmpath-dashboard'
 import AddChildModal from '@/components/add-child-modal'
+import { isChildModeActive } from '@/lib/child-pin'
 import type { Child } from '@/types/database'
 
 type DashboardProps = { childId: string; parentId: string; childName: string; childAge: number; childAvatar: string; childColor: string; childGameMode: string }
@@ -45,6 +46,11 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
+    if (isChildModeActive()) {
+      window.location.replace('/play/select')
+      return
+    }
+
     let active = true
     const db = getFirebaseDb()
 
@@ -188,6 +194,17 @@ export default function DashboardPage() {
             </span>
           </button>
         ))}
+        <button
+          onClick={() => window.location.assign('/play/select')}
+          style={{
+            padding: '6px 14px', borderRadius: '20px', border: 'none',
+            background: '#6366F1', color: 'white', cursor: 'pointer',
+            fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: '0.82rem',
+            transition: 'all 0.15s', flexShrink: 0,
+          }}
+        >
+          Hand to Child
+        </button>
         <button
           onClick={() => setShowAddChild(true)}
           style={{
