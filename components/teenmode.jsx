@@ -46,6 +46,7 @@ const GROUNDING_STEPS = [
 ];
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const TRIGGERS = ["School", "Friends", "Family", "Sleep", "Noise", "Change"];
 
 // ── Styles ─────────────────────────────────────────────────────────────
 
@@ -69,14 +70,6 @@ function btn(color) {
     background: color, color: "white", fontFamily: "'Outfit', sans-serif",
     fontWeight: 700, fontSize: "1rem", cursor: "pointer",
     boxShadow: `0 4px 20px ${color}44`, transition: "opacity 0.15s",
-  };
-}
-
-function ghostBtn() {
-  return {
-    background: "none", border: "none", color: "#64748B",
-    fontFamily: "'Outfit', sans-serif", fontSize: "0.85rem",
-    cursor: "pointer", padding: "8px 0",
   };
 }
 
@@ -231,6 +224,10 @@ export default function TeenMode({ childId, parentId }) {
   const [sessionCount, setSessionCount] = useState(0);
   const [sessionSaveError, setSessionSaveError] = useState(null);
   const [sessionSaveStatus, setSessionSaveStatus] = useState(null);
+  const [selectedTriggers, setSelectedTriggers] = useState([]);
+  const [intensity, setIntensity] = useState(3);
+  const [urge, setUrge] = useState(2);
+  const [reflection, setReflection] = useState("");
   const sessionSaveStartedRef = useRef(false);
 
   useEffect(() => {
@@ -243,6 +240,7 @@ export default function TeenMode({ childId, parentId }) {
 
   const mood     = selectedMood ? MOODS.find(m => m.id === selectedMood) : null;
   const activity = selectedMood ? ACTIVITY[selectedMood] : null;
+  const continueDisabled = !selectedMood;
 
   function selectMood(id) {
     sessionSaveStartedRef.current = false;
@@ -252,11 +250,19 @@ export default function TeenMode({ childId, parentId }) {
     setScreen("activity");
   }
 
-  async function handleComplete() {
+  function toggleTrigger(trigger) {
+    setSelectedTriggers(prev => (
+      prev.includes(trigger)
+        ? prev.filter(item => item !== trigger)
+        : [...prev, trigger]
+    ));
+  }
+
+  async function saveCheckIn(completedActivity) {
     if (sessionSaveStartedRef.current) return;
     sessionSaveStartedRef.current = true;
 
-    if (childId && parentId && selectedMood) {
+    if (childId && parentId && selectedMood && completedActivity) {
       const db = getFirebaseDb();
       const now = new Date();
       try {
@@ -267,8 +273,12 @@ export default function TeenMode({ childId, parentId }) {
           childId,
           mood: MOOD_MAP[selectedMood],
           stars: 3,
-          game: ACTIVITY[selectedMood]?.name ?? "",
+          game: completedActivity.name,
           world: "Teen Mode",
+          triggers: selectedTriggers,
+          intensity: Number(intensity),
+          urge: Number(urge),
+          reflection: reflection.trim(),
           dayLabel: DAY_LABELS[now.getDay()],
           playedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
@@ -278,7 +288,7 @@ export default function TeenMode({ childId, parentId }) {
         setScreen("done");
         window.setTimeout(() => {
           window.location.replace("/dashboard");
-        }, 700);
+        }, 1200);
       } catch (err) {
         console.error("Teen session insert failed:", err);
         setSessionSaveError("Session could not be saved");
@@ -289,6 +299,10 @@ export default function TeenMode({ childId, parentId }) {
       return;
     }
     setScreen("done");
+  }
+
+  function handleComplete() {
+    saveCheckIn(activity);
   }
 
   return (
@@ -307,13 +321,13 @@ export default function TeenMode({ childId, parentId }) {
         fontFamily: "'Outfit', sans-serif",
         color: "#F1F5F9",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: "1.5rem 1rem",
+        padding: "1.5rem 1rem 6rem",
       }}>
         <div style={{ width: "100%", maxWidth: "420px", animation: "fadeUp 0.4s ease" }}>
 
           {/* ── Check-in screen ────────────────────────── */}
           {screen === "checkin" && (
-            <div style={{ textAlign: "center" }}>
+            <div data-testid="daily-checkin-start" style={{ textAlign: "center" }}>
               <div style={{ marginBottom: "2rem" }}>
                 <div style={{
                   width: "56px", height: "56px", borderRadius: "16px",
@@ -338,7 +352,7 @@ export default function TeenMode({ childId, parentId }) {
                 </div>
               )}
 
-              <button onClick={() => setScreen("mood")} style={btn("#6366F1")}>
+              <button data-testid="daily-checkin-open" onClick={() => setScreen("mood")} style={btn("#6366F1")}>
                 How am I feeling?
               </button>
             </div>
@@ -346,7 +360,7 @@ export default function TeenMode({ childId, parentId }) {
 
           {/* ── Mood picker ────────────────────────────── */}
           {screen === "mood" && (
-            <div>
+            <div data-testid="daily-checkin-form">
               <div style={{ marginBottom: "1.5rem" }}>
                 <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#F1F5F9", marginBottom: "0.3rem" }}>
                   Right now I feel…
@@ -359,6 +373,8 @@ export default function TeenMode({ childId, parentId }) {
                   <button
                     key={m.id}
                     className="mood-card"
+                    data-testid={`daily-checkin-outcome-${m.id}`}
+                    aria-pressed={selectedMood === m.id}
                     onClick={() => selectMood(m.id)}
                     style={{
                       ...card,
@@ -367,7 +383,7 @@ export default function TeenMode({ childId, parentId }) {
                       cursor: "pointer",
                       display: "flex", alignItems: "center", gap: "12px",
                       transition: "transform 0.15s, box-shadow 0.15s",
-                      border: `1px solid ${m.color}33`,
+                      border: selectedMood === m.id ? `2px solid ${m.color}` : `1px solid ${m.color}33`,
                     }}
                   >
                     <span style={{ fontSize: "1.8rem" }}>{m.emoji}</span>
@@ -378,6 +394,104 @@ export default function TeenMode({ childId, parentId }) {
                   </button>
                 ))}
               </div>
+
+              <div style={{ marginTop: "1.5rem" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#CBD5E1", marginBottom: "0.75rem" }}>
+                  What affected this?
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                  {TRIGGERS.map(trigger => {
+                    const selected = selectedTriggers.includes(trigger);
+                    return (
+                      <button
+                        key={trigger}
+                        type="button"
+                        data-testid={`daily-checkin-trigger-${trigger.toLowerCase()}`}
+                        aria-pressed={selected}
+                        onClick={() => toggleTrigger(trigger)}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "999px",
+                          border: selected ? "1px solid #A5B4FC" : "1px solid rgba(255,255,255,0.1)",
+                          background: selected ? "rgba(99,102,241,0.28)" : "rgba(255,255,255,0.06)",
+                          color: selected ? "#E0E7FF" : "#94A3B8",
+                          fontFamily: "'Outfit', sans-serif",
+                          fontWeight: 700,
+                          fontSize: "0.82rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {trigger}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ marginTop: "1.5rem", display: "grid", gap: "1rem" }}>
+                <label style={{ display: "grid", gap: "0.5rem", color: "#CBD5E1", fontSize: "0.85rem", fontWeight: 700 }}>
+                  Intensity
+                  <input
+                    data-testid="daily-checkin-intensity"
+                    type="range"
+                    min="1"
+                    max="5"
+                    value={intensity}
+                    onChange={(event) => setIntensity(event.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: "0.5rem", color: "#CBD5E1", fontSize: "0.85rem", fontWeight: 700 }}>
+                  Urge
+                  <input
+                    data-testid="daily-checkin-urge"
+                    type="range"
+                    min="1"
+                    max="5"
+                    value={urge}
+                    onChange={(event) => setUrge(event.target.value)}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+              </div>
+
+              <label style={{ display: "grid", gap: "0.5rem", marginTop: "1.5rem", color: "#CBD5E1", fontSize: "0.85rem", fontWeight: 700 }}>
+                Reflection
+                <textarea
+                  data-testid="daily-checkin-reflection"
+                  value={reflection}
+                  onChange={(event) => setReflection(event.target.value)}
+                  placeholder="One thing I noticed..."
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    resize: "vertical",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "#F1F5F9",
+                    padding: "12px",
+                    fontFamily: "'Outfit', sans-serif",
+                    fontSize: "0.95rem",
+                    lineHeight: 1.4,
+                  }}
+                />
+              </label>
+
+              <button
+                data-testid="daily-checkin-continue"
+                type="button"
+                disabled={continueDisabled}
+                onClick={() => setScreen("activity")}
+                style={{
+                  ...btn("#6366F1"),
+                  marginTop: "1.5rem",
+                  opacity: continueDisabled ? 0.55 : 1,
+                  cursor: continueDisabled ? "not-allowed" : "pointer",
+                }}
+              >
+                Continue
+              </button>
             </div>
           )}
 
@@ -413,7 +527,7 @@ export default function TeenMode({ childId, parentId }) {
 
           {/* ── Done screen ────────────────────────────── */}
           {screen === "done" && mood && (
-            <div style={{ textAlign: "center", animation: "pop 0.5s ease" }}>
+            <div data-testid="daily-checkin-complete" style={{ textAlign: "center", animation: "pop 0.5s ease" }}>
               <div style={{ fontSize: "3.5rem", marginBottom: "1rem" }}>✅</div>
               <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#F1F5F9", marginBottom: "0.4rem" }}>
                 Check-in complete
@@ -428,7 +542,7 @@ export default function TeenMode({ childId, parentId }) {
                 </div>
               )}
               {sessionSaveStatus && (
-                <div style={{ marginBottom: "1rem", background: "rgba(22,163,74,0.14)", border: "1px solid rgba(74,222,128,0.5)", color: "#86EFAC", borderRadius: "12px", padding: "10px 12px", fontWeight: 700, fontSize: "0.86rem" }}>
+                <div data-testid="daily-checkin-save-success" style={{ marginBottom: "1rem", background: "rgba(22,163,74,0.14)", border: "1px solid rgba(74,222,128,0.5)", color: "#86EFAC", borderRadius: "12px", padding: "10px 12px", fontWeight: 700, fontSize: "0.86rem" }}>
                   {sessionSaveStatus}
                 </div>
               )}

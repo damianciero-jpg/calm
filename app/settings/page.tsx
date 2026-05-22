@@ -117,11 +117,15 @@ export default function SettingsPage() {
 
     if (authLoading) return () => { active = false }
     if (!user) {
-      setLoading(false)
+      queueMicrotask(() => {
+        if (active) setLoading(false)
+      })
       return () => { active = false }
     }
 
-    setLoading(true)
+    queueMicrotask(() => {
+      if (active) setLoading(true)
+    })
     loadSettings()
 
     return () => {

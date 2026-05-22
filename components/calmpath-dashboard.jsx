@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -187,7 +187,12 @@ export default function CalmPathDashboard({
 
   useEffect(() => {
     let active = true;
-    if (!childId) { setSessionsLoading(false); return () => { active = false; }; }
+    if (!childId) {
+      queueMicrotask(() => {
+        if (active) setSessionsLoading(false);
+      });
+      return () => { active = false; };
+    }
 
     const db = getFirebaseDb();
     const weekAgo = new Date();
@@ -238,7 +243,7 @@ export default function CalmPathDashboard({
   const dayDetail     = selectedDay ? sessions.filter((s) => s.date === selectedDay) : [];
   const weekGlance    = buildWeekAtAGlance(sessions);
 
-  const fetchAIInsights = async () => {
+  const fetchAIInsights = useCallback(async () => {
     if (!sessions.length) {
       setAiError("No sessions yet this week to analyze.");
       return;
@@ -259,13 +264,13 @@ export default function CalmPathDashboard({
     } finally {
       setAiLoading(false);
     }
-  };
+  }, [sessions]);
 
   useEffect(() => {
     if (tab === "insights" && aiInsights.length === 0 && !sessionsLoading) {
-      fetchAIInsights();
+      queueMicrotask(fetchAIInsights);
     }
-  }, [tab, sessionsLoading]);
+  }, [tab, sessionsLoading, aiInsights.length, fetchAIInsights]);
 
   const tabs = [
     { id: "overview", label: "Overview", icon: "📊" },
@@ -289,12 +294,13 @@ export default function CalmPathDashboard({
         .tab-btn:hover { background: #F1F5F9 !important; }
         .day-pill:hover { transform: scale(1.06); cursor: pointer; }
         .log-row:hover { background: #F8FAFC !important; }
+        .recharts-responsive-container, .recharts-wrapper, .recharts-surface { pointer-events: none; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #F1F5F9; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
       `}</style>
 
-      <div style={{
+      <div data-testid="progress-dashboard" style={{
         minHeight: "100vh",
         background: "#F8FAFC",
         fontFamily: "'Outfit', sans-serif",
@@ -402,6 +408,7 @@ export default function CalmPathDashboard({
                 </div>
                 <a
                   href={effectiveGameMode === "teen" ? `/play-teen?childId=${childId}` : `/play?childId=${childId}`}
+                  data-testid={effectiveGameMode === "teen" ? "daily-checkin-nav" : "moodquest-nav"}
                   style={{ padding: "10px 22px", borderRadius: "12px", background: effectiveGameMode === "teen" ? "#312E81" : childColor, color: "white", fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
                   {effectiveGameMode === "teen" ? "Start Check-in 🌙" : "Play MoodQuest 🎮"}
@@ -410,14 +417,14 @@ export default function CalmPathDashboard({
 
               {/* Stat cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "1.5rem" }}>
-                <StatCard icon="🎮" label="Sessions" value={sessionsLoading ? "…" : totalSessions} sub="This week" color="#6366F1" delay="0s" />
+                <div data-testid="progress-sessions-stat"><StatCard icon="🎮" label="Sessions" value={sessionsLoading ? "…" : totalSessions} sub="This week" color="#6366F1" delay="0s" /></div>
                 <StatCard icon="⭐" label="Avg Stars" value={sessionsLoading ? "…" : avgStars} sub="Out of 3.0" color="#F59E0B" delay="0.08s" />
                 <StatCard icon={topMood?.emoji ?? "😊"} label="Top Mood" value={topMood?.label ?? "—"} sub={topMood ? `${topMood.value} times` : "No data"} color={topMood?.color ?? "#6366F1"} delay="0.16s" />
                 <StatCard icon="💛" label="Calm Days" value={sessionsLoading ? "…" : sessions.filter(s => ["happy","calm"].includes(s.mood)).length} sub="Happy/Calm logs" color="#10B981" delay="0.24s" />
               </div>
 
               {/* Mood trend chart */}
-              <div style={{ background: "white", borderRadius: "20px", padding: "1.5rem", boxShadow: "0 2px 16px rgba(15,23,42,0.06)", marginBottom: "1.5rem" }}>
+              <div data-testid="progress-mood-chart" style={{ background: "white", borderRadius: "20px", padding: "1.5rem", boxShadow: "0 2px 16px rgba(15,23,42,0.06)", marginBottom: "1.5rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
                   <div>
                     <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: "1.2rem", color: "#0F172A" }}>Mood Score This Week</div>
@@ -546,7 +553,7 @@ export default function CalmPathDashboard({
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
                 <div>
                   <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: "1.4rem", color: "#0F172A" }}>AI Pattern Analysis</div>
-                  <div style={{ fontSize: "0.8rem", color: "#94A3B8", marginTop: "2px" }}>Powered by Claude · Based on this week's sessions</div>
+                  <div style={{ fontSize: "0.8rem", color: "#94A3B8", marginTop: "2px" }}>Powered by Claude · Based on this week&apos;s sessions</div>
                 </div>
                 <button
                   onClick={fetchAIInsights}

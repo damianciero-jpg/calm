@@ -22,7 +22,7 @@ export function withTimeout<T>(promise: PromiseLike<T>, label: string): Promise<
   ])
 }
 
-export async function getBrowserSession(label: string): Promise<User | null> {
+export async function getBrowserSession(): Promise<User | null> {
   const auth = getFirebaseAuth()
 
   for (let attempt = 1; attempt <= SESSION_RETRY_ATTEMPTS; attempt += 1) {

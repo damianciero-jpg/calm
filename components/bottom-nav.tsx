@@ -33,7 +33,11 @@ function BottomNavContent() {
 
     if (authLoading) return () => undefined
     if (!user) {
-      setRole(null); setFirstChildHref(null); setUnread(0)
+      queueMicrotask(() => {
+        setRole(null)
+        setFirstChildHref(null)
+        setUnread(0)
+      })
       return () => undefined
     }
     const uid = user.uid
@@ -74,7 +78,6 @@ function BottomNavContent() {
     return () => {
       if (unsubscribeNotifications) unsubscribeNotifications()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading])
 
   if (AUTH_PATHS.has(pathname) || authLoading || !role) return null
@@ -101,7 +104,7 @@ function BottomNavContent() {
     <nav style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,
       background: 'white', borderTop: '1px solid #E2E8F0',
-      display: 'flex', zIndex: 50,
+      display: 'flex', zIndex: 2147483647, isolation: 'isolate', transform: 'translateZ(0)',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       {tabs.map(tab => {
@@ -111,6 +114,7 @@ function BottomNavContent() {
             key={tab.id}
             href={tab.href}
             style={{
+              position: 'relative', zIndex: 1,
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', padding: '8px 0 6px', gap: '2px',
               textDecoration: 'none', transition: 'color 0.15s',

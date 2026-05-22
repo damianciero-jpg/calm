@@ -89,7 +89,7 @@ function FloatingItem({ item, x, y, onClick, id }) {
   );
 }
 
-function TapGame({ game, mood, onComplete }) {
+function TapGame({ game, onComplete }) {
   const [items, setItems] = useState(() =>
     Array.from({ length: 8 }, (_, i) => ({
       id: i,
@@ -122,7 +122,7 @@ function TapGame({ game, mood, onComplete }) {
     const active = items.filter((i) => !i.popped).length;
     if (active === 0 && items.length > 0) {
       clearInterval(timerRef.current);
-      setDone(true);
+      queueMicrotask(() => setDone(true));
     }
   }, [items]);
 
@@ -255,7 +255,6 @@ function BreathGame({ game, onComplete }) {
 
 function RainbowGame({ game, onComplete }) {
   const colors = ["#FF6B6B", "#FF9F43", "#FFD93D", "#6BCB77", "#74B9FF", "#A29BFE"];
-  const labels = ["Red", "Orange", "Yellow", "Green", "Blue", "Purple"];
   const [painted, setPainted] = useState([]);
 
   const paint = (i) => {
@@ -277,6 +276,7 @@ function RainbowGame({ game, onComplete }) {
         {colors.map((color, i) => (
           <button
             key={i}
+            data-testid="rainbow-color"
             onClick={() => paint(i)}
             style={{
               width: "52px", height: "52px", borderRadius: "50%",
@@ -514,13 +514,13 @@ export default function MoodQuest({ childId, parentId }) {
               Tell us how you feel, then go on an adventure!
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "2.5rem", flexWrap: "wrap" }}>
-              {MOODS.slice(0, 4).map((m) => (
+              {MOODS.slice(0, 4).map((m, index) => (
                 <div key={m.id} style={{
                   fontSize: "1.8rem", background: "white", borderRadius: "50%",
                   width: "52px", height: "52px", display: "flex", alignItems: "center",
                   justifyContent: "center", boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
                   animation: "float-0 3s ease-in-out infinite",
-                  animationDelay: `${Math.random() * 1.5}s`,
+                  animationDelay: `${index * 0.2}s`,
                 }}>
                   {m.emoji}
                 </div>
@@ -616,7 +616,7 @@ export default function MoodQuest({ childId, parentId }) {
               ...btnStyle(mood.color),
               fontSize: "1.2rem", padding: "15px 44px", width: "100%",
             }}>
-              Let's Play! 🎮
+              Let&apos;s Play! 🎮
             </button>
             <button onClick={() => setScreen("mood")} style={{
               background: "none", border: "none", color: "#aaa", marginTop: "1rem",
@@ -648,7 +648,7 @@ export default function MoodQuest({ childId, parentId }) {
             <div style={{ borderRadius: "20px", overflow: "hidden", boxShadow: "0 8px 30px rgba(0,0,0,0.1)" }}>
               {game.type === "tap" || game.type === "breath" ? (
                 game.type === "tap" ? (
-                  <TapGame game={game} mood={mood} onComplete={handleGameComplete} />
+                  <TapGame game={game} onComplete={handleGameComplete} />
                 ) : (
                   <BreathGame game={game} onComplete={handleGameComplete} />
                 )
@@ -734,7 +734,7 @@ export default function MoodQuest({ childId, parentId }) {
             {sessionLog.length > 0 && (
               <div style={{ marginTop: "1.5rem", background: "white", borderRadius: "16px", padding: "1rem", boxShadow: "0 4px 15px rgba(0,0,0,0.06)" }}>
                 <div style={{ fontSize: "0.8rem", fontWeight: 800, color: "#aaa", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>
-                  Today's Quests
+                  Today&apos;s Quests
                 </div>
                 {sessionLog.slice(-3).map((log, i) => {
                   const m = MOODS.find((x) => x.id === log.mood);

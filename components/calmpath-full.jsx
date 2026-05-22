@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { waitForFirebaseUser } from "@/lib/browser-auth";
 import { getFirebaseDb } from "@/lib/firebase";
@@ -253,7 +253,6 @@ export default function CalmPathApp() {
 
       if (!childRows?.length) { setChildrenLoading(false); return; }
 
-      const ids = childRows.map(c => c.id);
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
 
@@ -359,7 +358,7 @@ export default function CalmPathApp() {
     showToast("Notification dismissed");
   }
 
-  async function fetchAINotes(child) {
+  const fetchAINotes = useCallback(async (child) => {
     if (!child || aiNotes[child.id]) return;
     if (!child.sessions.length) {
       setAiNotes(prev => ({ ...prev, [child.id]: { error: true } }));
@@ -386,11 +385,11 @@ export default function CalmPathApp() {
     } finally {
       setAiLoading(false);
     }
-  }
+  }, [aiNotes]);
 
   useEffect(() => {
-    if (view === "therapist" && selectedChild) fetchAINotes(selectedChild);
-  }, [view, selectedChild]);
+    if (view === "therapist" && selectedChild) queueMicrotask(() => fetchAINotes(selectedChild));
+  }, [view, selectedChild, fetchAINotes]);
 
   const filteredNotifs = notifFilter === "all"
     ? notifications
@@ -401,7 +400,6 @@ export default function CalmPathApp() {
   const notes     = aiNotes[selectedChild?.id ?? ""];
   const radarData = buildRadarData(selectedChild?.sessions ?? []);
   const chartData = buildChartData(selectedChild?.sessions ?? []);
-  const breakdown = buildMoodBreakdown(selectedChild?.sessions ?? []);
 
   const NAV = [
     { id:"notifications", label:"Notifications", icon:"🔔", badge: unread },
@@ -480,7 +478,7 @@ export default function CalmPathApp() {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1.25rem" }}>
                 <div>
                   <div style={{ fontFamily:"'DM Serif Display',serif", fontSize:"1.5rem", color:"#0F172A" }}>Notifications</div>
-                  <div style={{ fontSize:"0.78rem", color:"#94A3B8", marginTop:"2px" }}>{unread} unread · Smart alerts from your children's sessions</div>
+                  <div style={{ fontSize:"0.78rem", color:"#94A3B8", marginTop:"2px" }}>{unread} unread · Smart alerts from your children&apos;s sessions</div>
                 </div>
                 <button onClick={markAllRead} style={{ background:"#F1F5F9", border:"none", borderRadius:"10px", padding:"8px 16px", fontFamily:"'Outfit',sans-serif", fontWeight:600, fontSize:"0.82rem", color:"#475569", cursor:"pointer" }}>
                   Mark all read
@@ -709,7 +707,7 @@ export default function CalmPathApp() {
                           <div style={{ color:"#EF4444", fontSize:"0.85rem" }}>
                             {selectedChild.sessions.length === 0
                               ? "No sessions this week to analyze."
-                              : "Couldn't load AI notes."}
+                              : "Could not load AI notes."}
                             {selectedChild.sessions.length > 0 && (
                               <button onClick={()=>{ setAiNotes(prev=>{ const n={...prev}; delete n[selectedChild.id]; return n; }); fetchAINotes(selectedChild); }} style={{ background:"none", border:"none", color:"#6366F1", cursor:"pointer", fontWeight:700, fontFamily:"'Outfit',sans-serif" }}> Retry</button>
                             )}

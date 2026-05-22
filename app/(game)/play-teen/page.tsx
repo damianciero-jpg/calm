@@ -79,13 +79,19 @@ function PlayTeenContent() {
 
     if (authLoading) return () => { active = false }
     if (!user) {
-      setAuthMissing(true)
-      setLoading(false)
+      queueMicrotask(() => {
+        if (!active) return
+        setAuthMissing(true)
+        setLoading(false)
+      })
       return () => { active = false }
     }
 
-    setLoading(true)
-    setAuthMissing(false)
+    queueMicrotask(() => {
+      if (!active) return
+      setLoading(true)
+      setAuthMissing(false)
+    })
     loadTeenPlay()
 
     return () => {

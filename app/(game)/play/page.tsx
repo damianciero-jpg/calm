@@ -88,13 +88,19 @@ function PlayPageContent() {
 
     if (authLoading) return () => { active = false }
     if (!user) {
-      setAuthMissing(true)
-      setLoading(false)
+      queueMicrotask(() => {
+        if (!active) return
+        setAuthMissing(true)
+        setLoading(false)
+      })
       return () => { active = false }
     }
 
-    setLoading(true)
-    setAuthMissing(false)
+    queueMicrotask(() => {
+      if (!active) return
+      setLoading(true)
+      setAuthMissing(false)
+    })
     loadPlay()
 
     return () => {
@@ -105,7 +111,7 @@ function PlayPageContent() {
   if (authLoading || loading) return <FullPageLoader />
   if (!user || authMissing) return <SignInRequired />
   if (selectedChild && user) return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
-  return <ChildSelector children={children} onSelect={child => {
+  return <ChildSelector childOptions={children} onSelect={child => {
     if ((child.age ?? 0) >= 13) router.push(`/play-teen?childId=${child.id}`)
     else setSelectedChild(child)
   }} />
@@ -130,7 +136,7 @@ function FullPageLoader() {
 
 // ── Child selector ────────────────────────────────────────────
 
-function ChildSelector({ children, onSelect }: { children: Child[]; onSelect: (c: Child) => void }) {
+function ChildSelector({ childOptions, onSelect }: { childOptions: Child[]; onSelect: (c: Child) => void }) {
   return (
     <>
       <style>{`
@@ -159,7 +165,7 @@ function ChildSelector({ children, onSelect }: { children: Child[]; onSelect: (c
             Pick a name to start your MoodQuest!
           </p>
 
-          {children.length === 0 ? (
+          {childOptions.length === 0 ? (
             <div style={{
               background: 'white', borderRadius: '20px', padding: '2rem',
               boxShadow: '0 4px 20px rgba(0,0,0,0.08)', color: '#94A3B8', fontSize: '0.95rem',
@@ -170,10 +176,10 @@ function ChildSelector({ children, onSelect }: { children: Child[]; onSelect: (c
           ) : (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${Math.min(children.length, 3)},1fr)`,
+              gridTemplateColumns: `repeat(${Math.min(childOptions.length, 3)},1fr)`,
               gap: '14px',
             }}>
-              {children.map((child) => (
+              {childOptions.map((child) => (
                 <button
                   key={child.id}
                   className="child-card"

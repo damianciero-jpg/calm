@@ -98,7 +98,9 @@ export default function DashboardPage() {
 
     if (authLoading) return () => { active = false }
     if (!user) {
-      setLoading(false)
+      queueMicrotask(() => {
+        if (active) setLoading(false)
+      })
       return () => { active = false }
     }
 

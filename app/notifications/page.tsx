@@ -108,12 +108,17 @@ export default function NotificationsPage() {
 
     if (authLoading) return () => { active = false }
     if (!user) {
-      setLoading(false)
+      queueMicrotask(() => {
+        if (active) setLoading(false)
+      })
       return () => { active = false }
     }
 
-    setLoading(true)
-    setError(null)
+    queueMicrotask(() => {
+      if (!active) return
+      setLoading(true)
+      setError(null)
+    })
     loadNotifications()
 
     return () => {
