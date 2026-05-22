@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 
 const WIDTH = 450;
 const HEIGHT = 650;
+const SCORE_HEIGHT = 44;
+const TOTAL_HEIGHT = SCORE_HEIGHT + HEIGHT;
 const DROP_COOLDOWN_MS = 500;
 const GAME_OVER_LINE_Y = 150;
 const GAME_OVER_DWELL_MS = 2000;
@@ -35,14 +37,39 @@ function clamp(value, min, max) {
 }
 
 export default function SensoryMergeGame({ theme = 'cozy', onGameOver = undefined, onScoreChange = undefined } = {}) {
+  const scaleRootRef = useRef(null);
   const wrapperRef = useRef(null);
   const gameRef = useRef(null);
   const [score, setScore] = useState(0);
   const [isBasketFull, setIsBasketFull] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
+  const [visualScale, setVisualScale] = useState(1);
 
   const selectedTheme = THEMES[theme] ? theme : 'cozy';
   const themeConfig = THEMES[selectedTheme];
+
+  useEffect(() => {
+    function updateScale() {
+      const viewportWidth = window.innerWidth || WIDTH;
+      const parentWidth = scaleRootRef.current?.parentElement?.clientWidth || viewportWidth;
+      const availableWidth = Math.min(viewportWidth, parentWidth);
+      setVisualScale(Math.min(1, availableWidth / WIDTH));
+    }
+
+    updateScale();
+
+    const observer = new ResizeObserver(updateScale);
+    if (scaleRootRef.current?.parentElement) {
+      observer.observe(scaleRootRef.current.parentElement);
+    }
+
+    window.addEventListener('resize', updateScale);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateScale);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -307,47 +334,70 @@ export default function SensoryMergeGame({ theme = 'cozy', onGameOver = undefine
   }
 
   return (
-    <div style={{ width: WIDTH, position: 'relative', fontFamily: "'Outfit', system-ui, sans-serif" }}>
-      <div style={{ width: WIDTH, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: themeConfig.text, fontWeight: 800 }}>
-        <span>Score</span>
-        <span>{score}</span>
-      </div>
+    <div
+      ref={scaleRootRef}
+      style={{
+        width: '100%',
+        maxWidth: WIDTH,
+        height: TOTAL_HEIGHT * visualScale,
+        margin: '0 auto',
+        overflow: 'hidden',
+        display: 'flex',
+        justifyContent: 'center',
+        fontFamily: "'Outfit', system-ui, sans-serif",
+      }}
+    >
       <div
-        ref={wrapperRef}
         style={{
           width: WIDTH,
-          height: HEIGHT,
-          overflow: 'hidden',
-          borderRadius: 8,
-          background: themeConfig.background,
-          boxShadow: selectedTheme === 'cosmic' ? '0 0 24px rgba(0, 229, 255, 0.28)' : '0 10px 30px rgba(93, 64, 55, 0.14)',
+          height: TOTAL_HEIGHT,
+          flex: '0 0 auto',
+          position: 'relative',
+          transform: `scale(${visualScale})`,
+          transformOrigin: 'top center',
         }}
-      />
-      {isBasketFull && (
-        <div style={{ position: 'absolute', left: 0, top: 44, width: WIDTH, height: HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', background: themeConfig.overlay, color: themeConfig.text, borderRadius: 8, textAlign: 'center', padding: 28, boxSizing: 'border-box' }}>
-          <div>
-            <div style={{ fontSize: 34, lineHeight: 1.1, fontWeight: 900, marginBottom: 12 }}>Basket Full!</div>
-            <div style={{ fontSize: 22, lineHeight: 1.3, fontWeight: 800, marginBottom: 28 }}>Great Job!</div>
-            <button
-              type="button"
-              onClick={clearBasket}
-              style={{
-                minWidth: 190,
-                minHeight: 56,
-                border: 0,
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontSize: 18,
-                fontWeight: 900,
-                color: selectedTheme === 'cosmic' ? '#071014' : '#4E342E',
-                background: selectedTheme === 'cosmic' ? '#00E5FF' : '#FFD54F',
-              }}
-            >
-              Clear Basket
-            </button>
-          </div>
+      >
+        <div style={{ width: WIDTH, height: SCORE_HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: themeConfig.text, fontWeight: 800 }}>
+          <span>Score</span>
+          <span>{score}</span>
         </div>
-      )}
+        <div
+          ref={wrapperRef}
+          style={{
+            width: WIDTH,
+            height: HEIGHT,
+            overflow: 'hidden',
+            borderRadius: 8,
+            background: themeConfig.background,
+            boxShadow: selectedTheme === 'cosmic' ? '0 0 24px rgba(0, 229, 255, 0.28)' : '0 10px 30px rgba(93, 64, 55, 0.14)',
+          }}
+        />
+        {isBasketFull && (
+          <div style={{ position: 'absolute', left: 0, top: SCORE_HEIGHT, width: WIDTH, height: HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', background: themeConfig.overlay, color: themeConfig.text, borderRadius: 8, textAlign: 'center', padding: 28, boxSizing: 'border-box' }}>
+            <div>
+              <div style={{ fontSize: 34, lineHeight: 1.1, fontWeight: 900, marginBottom: 12 }}>Basket Full!</div>
+              <div style={{ fontSize: 22, lineHeight: 1.3, fontWeight: 800, marginBottom: 28 }}>Great Job!</div>
+              <button
+                type="button"
+                onClick={clearBasket}
+                style={{
+                  minWidth: 190,
+                  minHeight: 56,
+                  border: 0,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: selectedTheme === 'cosmic' ? '#071014' : '#4E342E',
+                  background: selectedTheme === 'cosmic' ? '#00E5FF' : '#FFD54F',
+                }}
+              >
+                Clear Basket
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -11,7 +11,7 @@ import MoodQuest from '@/components/moodquest.jsx'
 import TeenMode from '@/components/teenmode'
 import type { Child } from '@/types/database'
 
-type GameChoice = 'moodquest' | 'merge' | 'teen'
+type GameChoice = 'moodquest' | 'bubbleDrop' | 'teen'
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
@@ -107,7 +107,7 @@ function PlayPageContent() {
   if (!user || authMissing) return <SignInRequired />
   if (selectedChild && user && selectedGame === 'moodquest') return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
   if (selectedChild && user && selectedGame === 'teen') return <TeenMode childId={selectedChild.id} parentId={user.uid} />
-  if (selectedChild && selectedGame === 'merge') return <MergeGameScreen child={selectedChild} onBack={() => setSelectedGame(null)} />
+  if (selectedChild && selectedGame === 'bubbleDrop') return <BubbleDropScreen child={selectedChild} onBack={() => setSelectedGame(null)} />
   if (selectedChild) return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
   return <ChildSelector childOptions={children} onSelect={child => {
     setSelectedGame(null)
@@ -132,14 +132,14 @@ function FullPageLoader() {
   )
 }
 
-function getMergeTheme(child: Child) {
+function getBubbleDropTheme(child: Child) {
   return (child.age ?? 0) >= 13 ? 'cosmic' : 'cozy'
 }
 
 function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () => void; onSelect: (choice: GameChoice) => void }) {
   const games: Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }> = [
     { id: 'moodquest', title: 'MoodQuest', description: 'Mood-based mini games and stars.', icon: '🎮', color: '#7C3AED' },
-    { id: 'merge', title: 'Merge Game ', description: 'Drop, merge, and clear the basket.', icon: '🫧', color: '#0EA5E9' },
+    { id: 'bubbleDrop', title: 'BubbleDrop', description: 'Drop, combine, and clear the basket.', icon: '🫧', color: '#0EA5E9' },
     { id: 'teen', title: 'Teen Mode', description: 'Daily check-in with a guided activity.', icon: '🌙', color: '#312E81' },
   ]
 
@@ -180,19 +180,19 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
   )
 }
 
-function MergeGameScreen({ child, onBack }: { child: Child; onBack: () => void }) {
-  const theme = getMergeTheme(child)
+function BubbleDropScreen({ child, onBack }: { child: Child; onBack: () => void }) {
+  const theme = getBubbleDropTheme(child)
 
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&display=swap');`}</style>
-      <div style={{ minHeight: '100vh', background: theme === 'cosmic' ? '#050814' : '#F7F3FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 1rem 6rem', fontFamily: "'Outfit',sans-serif" }}>
-        <div style={{ width: '450px', maxWidth: '100%', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+      <div style={{ minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden', background: theme === 'cosmic' ? '#050814' : '#F7F3FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 0 6rem', fontFamily: "'Outfit',sans-serif" }}>
+        <div style={{ width: 'min(450px, 100vw)', maxWidth: '100vw', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '0 10px', boxSizing: 'border-box' }}>
           <button type="button" onClick={onBack} style={{ border: 'none', background: 'white', color: '#475569', borderRadius: '10px', padding: '9px 12px', fontFamily: "'Outfit',sans-serif", fontWeight: 800, cursor: 'pointer' }}>
             ← Games
           </button>
           <div style={{ color: theme === 'cosmic' ? '#EAFBFF' : '#4E342E', fontWeight: 900 }}>
-            Merge Game
+            BubbleDrop
           </div>
         </div>
         <SensoryMergeGame theme={theme} />
