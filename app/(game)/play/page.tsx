@@ -1,8 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
 import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
@@ -12,6 +12,15 @@ import TeenMode from '@/components/teenmode'
 import type { Child } from '@/types/database'
 
 type GameChoice = 'moodquest' | 'bubbleDrop' | 'teen'
+
+const BUBBLEDROP_MOODS = [
+  { id: 'happy', label: 'Happy', emoji: '😄', color: '#F59E0B' },
+  { id: 'calm', label: 'Calm', emoji: '😌', color: '#10B981' },
+  { id: 'anxious', label: 'Worried', emoji: '😟', color: '#3B82F6' },
+  { id: 'angry', label: 'Frustrated', emoji: '😠', color: '#EF4444' },
+  { id: 'sad', label: 'Sad', emoji: '😢', color: '#8B5CF6' },
+  { id: 'tired', label: 'Tired', emoji: '😴', color: '#F97316' },
+]
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
@@ -107,7 +116,7 @@ function PlayPageContent() {
   if (!user || authMissing) return <SignInRequired />
   if (selectedChild && user && selectedGame === 'moodquest') return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
   if (selectedChild && user && selectedGame === 'teen') return <TeenMode childId={selectedChild.id} parentId={user.uid} />
-  if (selectedChild && selectedGame === 'bubbleDrop') return <BubbleDropScreen child={selectedChild} onBack={() => setSelectedGame(null)} />
+  if (selectedChild && user && selectedGame === 'bubbleDrop') return <BubbleDropScreen child={selectedChild} parentId={user.uid} onBack={() => setSelectedGame(null)} />
   if (selectedChild) return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
   return <ChildSelector childOptions={children} onSelect={child => {
     setSelectedGame(null)
@@ -134,6 +143,12 @@ function FullPageLoader() {
 
 function getBubbleDropTheme(child: Child) {
   return (child.age ?? 0) >= 13 ? 'cosmic' : 'cozy'
+}
+
+function calculateBubbleDropStars(score: number) {
+  if (score >= 500) return 3
+  if (score >= 250) return 2
+  return 1
 }
 
 function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () => void; onSelect: (choice: GameChoice) => void }) {
@@ -180,22 +195,106 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
   )
 }
 
-function BubbleDropScreen({ child, onBack }: { child: Child; onBack: () => void }) {
+function BubbleDropScreen({ child, parentId, onBack }: { child: Child; parentId: string; onBack: () => void }) {
   const theme = getBubbleDropTheme(child)
+  const [selectedMood, setSelectedMood] = useState('')
+  const [score, setScore] = useState(0)
+  const [gameEnded, setGameEnded] = useState(false)
+  const [saveStatus, setSaveStatus] = useState('')
+  const saveStartedRef = useRef(false)
+
+  const exitBubbleDrop = useCallback(() => {
+    if (!gameEnded && score > 0 && !window.confirm("Are you sure? Your score won't be saved")) {
+      return
+    }
+
+    window.location.assign('/play')
+  }, [gameEnded, score])
+
+  const goHome = useCallback(() => {
+    window.location.assign('/dashboard')
+  }, [])
+
+  const saveBubbleDropSession = useCallback(async (finalScore: number) => {
+    if (saveStartedRef.current || !selectedMood) return
+    saveStartedRef.current = true
+    setGameEnded(true)
+    setSaveStatus('Saving...')
+
+    const stars = calculateBubbleDropStars(finalScore)
+    const db = getFirebaseDb()
+
+    try {
+      await addDoc(collection(db, 'sessions'), {
+        parentId,
+        childId: child.id,
+        child_id: child.id,
+        mood: selectedMood,
+        game: 'BubbleDrop',
+        world: 'BubbleDrop',
+        stars,
+        score: finalScore,
+        playedAt: serverTimestamp(),
+        played_at: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      })
+      setSaveStatus('Saved! ⭐')
+    } catch (err) {
+      console.error('BubbleDrop session insert failed:', err)
+      setSaveStatus('Save failed')
+    }
+  }, [child.id, parentId, selectedMood])
+
+  const handleScoreChange = useCallback((nextScore: number) => {
+    setScore(nextScore)
+  }, [])
+
+  const handleGameOver = useCallback((finalScore: number) => {
+    setScore(finalScore)
+    saveBubbleDropSession(finalScore)
+  }, [saveBubbleDropSession])
+
+  if (!selectedMood) {
+    return (
+      <>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&display=swap');`}</style>
+        <div style={{ minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden', background: theme === 'cosmic' ? '#050814' : '#F7F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1rem 6rem', fontFamily: "'Outfit',sans-serif" }}>
+          <main style={{ width: '100%', maxWidth: '560px' }}>
+            <button type="button" onClick={onBack} style={{ marginBottom: '1rem', border: 'none', background: 'white', color: '#475569', borderRadius: '10px', padding: '9px 12px', fontFamily: "'Outfit',sans-serif", fontWeight: 800, cursor: 'pointer' }}>
+              ← Games
+            </button>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <h1 style={{ margin: 0, color: theme === 'cosmic' ? '#EAFBFF' : '#1F2937', fontSize: '2rem', fontWeight: 900 }}>BubbleDrop</h1>
+              <p style={{ margin: '0.5rem 0 0', color: theme === 'cosmic' ? '#A5B4FC' : '#64748B', fontSize: '0.95rem', fontWeight: 700 }}>How are you feeling before you play?</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px' }}>
+              {BUBBLEDROP_MOODS.map(mood => (
+                <button key={mood.id} type="button" onClick={() => setSelectedMood(mood.id)} style={{ minHeight: '96px', border: `2px solid ${mood.color}44`, borderRadius: '16px', background: 'white', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: '#1F2937' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '6px' }}>{mood.emoji}</div>
+                  <div>{mood.label}</div>
+                </button>
+              ))}
+            </div>
+          </main>
+        </div>
+      </>
+    )
+  }
 
   return (
     <>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&display=swap');`}</style>
       <div style={{ minHeight: '100vh', width: '100%', maxWidth: '100vw', overflowX: 'hidden', background: theme === 'cosmic' ? '#050814' : '#F7F3FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 0 6rem', fontFamily: "'Outfit',sans-serif" }}>
         <div style={{ width: 'min(450px, 100vw)', maxWidth: '100vw', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '0 10px', boxSizing: 'border-box' }}>
-          <button type="button" onClick={onBack} style={{ border: 'none', background: 'white', color: '#475569', borderRadius: '10px', padding: '9px 12px', fontFamily: "'Outfit',sans-serif", fontWeight: 800, cursor: 'pointer' }}>
-            ← Games
+          <button type="button" onClick={exitBubbleDrop} aria-label="Exit BubbleDrop" style={{ width: '42px', height: '42px', border: 'none', background: 'white', color: '#475569', borderRadius: '50%', fontFamily: "'Outfit',sans-serif", fontWeight: 900, fontSize: '1.2rem', cursor: 'pointer', lineHeight: 1 }}>
+            ×
           </button>
           <div style={{ color: theme === 'cosmic' ? '#EAFBFF' : '#4E342E', fontWeight: 900 }}>
             BubbleDrop
           </div>
+          <div style={{ width: '42px' }} />
         </div>
-        <SensoryMergeGame theme={theme} />
+        <SensoryMergeGame theme={theme} onScoreChange={handleScoreChange} onGameOver={handleGameOver} gameOverStatus={saveStatus} onGoHome={goHome} />
       </div>
     </>
   )

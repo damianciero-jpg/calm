@@ -76,14 +76,23 @@ function formatRelativeTime(isoString) {
 }
 
 function dbSessionToRow(s) {
-  const playedAt = s.playedAt?.toDate ? s.playedAt.toDate() : new Date(s.playedAt ?? Date.now());
+  const playedAt = getSessionPlayedAt(s);
   return {
-    date:  s.dayLabel,
+    date:  s.dayLabel ?? playedAt.toLocaleDateString("en-US", { weekday: "short" }),
     mood:  s.mood,
-    stars: s.stars,
-    game:  s.game,
+    stars: s.stars ?? 1,
+    game:  s.game ?? "Session",
     time:  playedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
+}
+
+function getSessionPlayedAt(session) {
+  const value = session.playedAt ?? session.played_at ?? session.createdAt ?? session.created_at ?? Date.now();
+  return value?.toDate ? value.toDate() : new Date(value);
+}
+
+function getSessionChildId(session) {
+  return session.childId ?? session.child_id;
 }
 
 function openPDFReport(child) {
@@ -280,7 +289,7 @@ export default function CalmPathApp() {
         color:    child.color,
         parent:   parentNames[child.parentId] ?? "Parent",
         therapist: therapistProfile.fullName ?? "Therapist",
-        sessions: allSessions.filter(s => s.childId === child.id).map(dbSessionToRow),
+        sessions: allSessions.filter(s => getSessionChildId(s) === child.id).map(dbSessionToRow),
         iepGoals: allGoals.filter(g => g.childId === child.id).map(g => `${g.label}: ${g.score}/${g.maxScore ?? 5}`),
         notes:    allNotes.find(n => n.childId === child.id)?.content ?? "",
       }));

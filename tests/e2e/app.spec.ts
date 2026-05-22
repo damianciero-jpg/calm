@@ -158,8 +158,8 @@ test.describe('Daily Check-In E2E', () => {
     const moodOption = page.getByTestId('daily-checkin-outcome-good')
     await moodOption.click()
     await expect(page.getByText('Gratitude Check')).toBeVisible()
-    await page.getByRole('button', { name: /next/i }).click()
-    await page.getByRole('button', { name: /next/i }).click()
+    await page.getByRole('button', { name: /^next →$/i }).click()
+    await page.getByRole('button', { name: /^next →$/i }).click()
     await page.getByRole('button', { name: /^done$/i }).click()
 
     await expect(page.getByTestId('daily-checkin-save-success')).toContainText('Session saved', {

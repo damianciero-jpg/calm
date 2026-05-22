@@ -87,19 +87,24 @@ function buildWeekAtAGlance(sessions) {
 }
 
 function dbRowToSession(s) {
-  const playedAt = s.playedAt?.toDate ? s.playedAt.toDate() : new Date(s.playedAt ?? Date.now());
+  const playedAt = getSessionPlayedAt(s);
   return {
-    date:  s.dayLabel,
+    date:  s.dayLabel ?? playedAt.toLocaleDateString("en-US", { weekday: "short" }),
     mood:  s.mood,
-    stars: s.stars,
-    game:  s.game,
+    stars: s.stars ?? 1,
+    game:  s.game ?? "Session",
     world: s.world ?? "",
     time:  playedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
   };
 }
 
 function getSessionPlayedAt(session) {
-  return session.playedAt?.toDate ? session.playedAt.toDate() : new Date(session.playedAt ?? session.createdAt ?? Date.now());
+  const value = session.playedAt ?? session.played_at ?? session.createdAt ?? session.created_at ?? Date.now();
+  return value?.toDate ? value.toDate() : new Date(value);
+}
+
+function getSessionChildId(session) {
+  return session.childId ?? session.child_id;
 }
 
 function StatCard({ icon, label, value, sub, color, delay }) {
@@ -214,7 +219,7 @@ export default function CalmPathDashboard({
 
         const rows = snapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(session => session.childId === childId && getSessionPlayedAt(session) >= weekAgo)
+          .filter(session => getSessionChildId(session) === childId && getSessionPlayedAt(session) >= weekAgo)
           .sort((a, b) => getSessionPlayedAt(a).getTime() - getSessionPlayedAt(b).getTime())
           .map(dbRowToSession);
 

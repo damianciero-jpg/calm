@@ -36,7 +36,22 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export default function SensoryMergeGame({ theme = 'cozy', onGameOver = undefined, onScoreChange = undefined } = {}) {
+/**
+ * @param {{
+ *   theme?: 'cozy' | 'cosmic',
+ *   onGameOver?: (finalScore: number) => void,
+ *   onScoreChange?: (score: number) => void,
+ *   gameOverStatus?: string,
+ *   onGoHome?: () => void,
+ * }} props
+ */
+export default function SensoryMergeGame({
+  theme = 'cozy',
+  onGameOver,
+  onScoreChange,
+  gameOverStatus = '',
+  onGoHome,
+} = {}) {
   const scaleRootRef = useRef(null);
   const wrapperRef = useRef(null);
   const gameRef = useRef(null);
@@ -376,10 +391,15 @@ export default function SensoryMergeGame({ theme = 'cozy', onGameOver = undefine
           <div style={{ position: 'absolute', left: 0, top: SCORE_HEIGHT, width: WIDTH, height: HEIGHT, display: 'flex', alignItems: 'center', justifyContent: 'center', background: themeConfig.overlay, color: themeConfig.text, borderRadius: 8, textAlign: 'center', padding: 28, boxSizing: 'border-box' }}>
             <div>
               <div style={{ fontSize: 34, lineHeight: 1.1, fontWeight: 900, marginBottom: 12 }}>Basket Full!</div>
-              <div style={{ fontSize: 22, lineHeight: 1.3, fontWeight: 800, marginBottom: 28 }}>Great Job!</div>
+              <div style={{ fontSize: 22, lineHeight: 1.3, fontWeight: 800, marginBottom: gameOverStatus ? 12 : 28 }}>Great Job!</div>
+              {gameOverStatus && (
+                <div style={{ fontSize: 18, lineHeight: 1.3, fontWeight: 900, marginBottom: 24 }}>
+                  {gameOverStatus}
+                </div>
+              )}
               <button
                 type="button"
-                onClick={clearBasket}
+                onClick={onGoHome ?? clearBasket}
                 style={{
                   minWidth: 190,
                   minHeight: 56,
@@ -392,7 +412,7 @@ export default function SensoryMergeGame({ theme = 'cozy', onGameOver = undefine
                   background: selectedTheme === 'cosmic' ? '#00E5FF' : '#FFD54F',
                 }}
               >
-                Clear Basket
+                {onGoHome ? 'Go Home' : 'Clear Basket'}
               </button>
             </div>
           </div>
