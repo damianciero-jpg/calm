@@ -1,13 +1,17 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 import { SignInRequired } from '@/lib/browser-auth'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
+import SensoryMergeGame from '@/components/SensoryMergeGame'
 import MoodQuest from '@/components/moodquest.jsx'
+import TeenMode from '@/components/teenmode'
 import type { Child } from '@/types/database'
+
+type GameChoice = 'moodquest' | 'merge' | 'teen'
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
@@ -36,13 +40,13 @@ export default function PlayPage() {
 }
 
 function PlayPageContent() {
-  const router       = useRouter()
   const searchParams = useSearchParams()
   const childIdParam = searchParams.get('childId')
   const [loading, setLoading]             = useState(true)
   const [authMissing, setAuthMissing]     = useState(false)
   const [children, setChildren]           = useState<Child[]>([])
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
+  const [selectedGame, setSelectedGame]   = useState<GameChoice | null>(null)
   const { user, loading: authLoading } = useFirebaseUser()
 
   useEffect(() => {
@@ -62,21 +66,12 @@ function PlayPageContent() {
         if (childIdParam) {
           const match = kids.find(k => k.id === childIdParam)
           if (match) {
-            if ((match.game_mode ?? 'kids') === 'teen') {
-              router.replace(`/play-teen?childId=${match.id}`)
-              return
-            }
             setSelectedChild(match)
             return
           }
         }
         if (kids.length === 1) {
-          const only = kids[0]
-          if ((only.game_mode ?? 'kids') === 'teen') {
-            router.replace(`/play-teen?childId=${only.id}`)
-            return
-          }
-          setSelectedChild(only)
+          setSelectedChild(kids[0])
         }
       } catch (err) {
         console.error('Play load failed', err)
@@ -106,14 +101,17 @@ function PlayPageContent() {
     return () => {
       active = false
     }
-  }, [router, childIdParam, user, authLoading])
+  }, [childIdParam, user, authLoading])
 
   if (authLoading || loading) return <FullPageLoader />
   if (!user || authMissing) return <SignInRequired />
-  if (selectedChild && user) return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
+  if (selectedChild && user && selectedGame === 'moodquest') return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
+  if (selectedChild && user && selectedGame === 'teen') return <TeenMode childId={selectedChild.id} parentId={user.uid} />
+  if (selectedChild && selectedGame === 'merge') return <MergeGameScreen child={selectedChild} onBack={() => setSelectedGame(null)} />
+  if (selectedChild) return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
   return <ChildSelector childOptions={children} onSelect={child => {
-    if ((child.age ?? 0) >= 13) router.push(`/play-teen?childId=${child.id}`)
-    else setSelectedChild(child)
+    setSelectedGame(null)
+    setSelectedChild(child)
   }} />
 }
 
@@ -129,6 +127,75 @@ function FullPageLoader() {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ color: '#64748B', fontFamily: "'Nunito',sans-serif", fontSize: '0.95rem' }}>Loading...</div>
+      </div>
+    </>
+  )
+}
+
+function getMergeTheme(child: Child) {
+  return (child.age ?? 0) >= 13 ? 'cosmic' : 'cozy'
+}
+
+function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () => void; onSelect: (choice: GameChoice) => void }) {
+  const games: Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }> = [
+    { id: 'moodquest', title: 'MoodQuest', description: 'Mood-based mini games and stars.', icon: '🎮', color: '#7C3AED' },
+    { id: 'merge', title: 'Merge Game ', description: 'Drop, merge, and clear the basket.', icon: '🫧', color: '#0EA5E9' },
+    { id: 'teen', title: 'Teen Mode', description: 'Daily check-in with a guided activity.', icon: '🌙', color: '#312E81' },
+  ]
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Baloo+2:wght@700;800&display=swap');
+        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        .game-option:hover { transform:translateY(-3px)!important; box-shadow:0 12px 30px rgba(15,23,42,0.14)!important; }
+      `}</style>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg,#F7F3FF 0%,#EBF5FF 50%,#F0FFF4 100%)', fontFamily: "'Nunito',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem 1.5rem 6rem' }}>
+        <main style={{ width: '100%', maxWidth: '760px', animation: 'fadeSlideUp 0.5s ease' }}>
+          <button type="button" onClick={onBack} style={{ marginBottom: '1rem', border: 'none', background: 'white', color: '#64748B', borderRadius: '10px', padding: '9px 12px', fontFamily: "'Nunito',sans-serif", fontWeight: 800, cursor: 'pointer' }}>
+            ← Change player
+          </button>
+
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.35rem' }}>{child.avatar ?? '🎮'}</div>
+            <h1 style={{ fontFamily: "'Baloo 2',cursive", fontSize: '2rem', fontWeight: 800, color: '#333', margin: 0 }}>
+              Choose a game for {child.name}
+            </h1>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '14px' }}>
+            {games.map(game => (
+              <button key={game.id} type="button" className="game-option" onClick={() => onSelect(game.id)} style={{ minHeight: '180px', background: 'white', border: `3px solid ${game.color}33`, borderRadius: '18px', padding: '20px 16px', cursor: 'pointer', transition: 'transform 0.2s ease, box-shadow 0.2s ease', boxShadow: `0 6px 18px ${game.color}18`, textAlign: 'left', fontFamily: "'Nunito',sans-serif" }}>
+                <div style={{ width: '54px', height: '54px', borderRadius: '16px', background: `${game.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', marginBottom: '18px' }}>
+                  {game.icon}
+                </div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#1F2937', marginBottom: '6px' }}>{game.title}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.35, color: '#64748B' }}>{game.description}</div>
+              </button>
+            ))}
+          </div>
+        </main>
+      </div>
+    </>
+  )
+}
+
+function MergeGameScreen({ child, onBack }: { child: Child; onBack: () => void }) {
+  const theme = getMergeTheme(child)
+
+  return (
+    <>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800;900&display=swap');`}</style>
+      <div style={{ minHeight: '100vh', background: theme === 'cosmic' ? '#050814' : '#F7F3FF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 1rem 6rem', fontFamily: "'Outfit',sans-serif" }}>
+        <div style={{ width: '450px', maxWidth: '100%', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <button type="button" onClick={onBack} style={{ border: 'none', background: 'white', color: '#475569', borderRadius: '10px', padding: '9px 12px', fontFamily: "'Outfit',sans-serif", fontWeight: 800, cursor: 'pointer' }}>
+            ← Games
+          </button>
+          <div style={{ color: theme === 'cosmic' ? '#EAFBFF' : '#4E342E', fontWeight: 900 }}>
+            Merge Game
+          </div>
+        </div>
+        <SensoryMergeGame theme={theme} />
       </div>
     </>
   )

@@ -53,9 +53,7 @@ function BottomNavContent() {
         const childrenSnap = await getDocs(query(collection(db, 'children'), where('parentId', '==', uid), limit(1)))
         const first = childrenSnap.docs[0]
         if (first) {
-          const data = first.data()
-          const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
-          setFirstChildHref(age >= 13 ? `/play-teen?childId=${first.id}` : `/play?childId=${first.id}`)
+          setFirstChildHref(`/play?childId=${first.id}`)
         } else {
           setFirstChildHref(null)
         }
