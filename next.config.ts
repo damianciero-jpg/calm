@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // No special config needed — ESLint runs as a separate lint step, not during build
+  async rewrites() {
+    return [
+      {
+        source: "/play/select",
+        destination: "/play-select",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
