@@ -111,6 +111,7 @@ function BottomNavContent() {
           <Link
             key={tab.id}
             href={tab.href}
+            prefetch
             style={{
               position: 'relative', zIndex: 1,
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',

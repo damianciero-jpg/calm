@@ -124,8 +124,8 @@ export default function ChildPlaySelectPage() {
 
     const enteredHash = await hashChildPin(nextPin, user.uid)
     if (enteredHash === expectedHash) {
-      enterChildMode(selectedChild.id)
-      const mode = selectedChild.gameMode ?? selectedChild.game_mode
+      const mode = selectedChild.gameMode ?? selectedChild.game_mode ?? 'kids'
+      enterChildMode(selectedChild.id, mode)
       window.location.assign(mode === 'teen' ? `/play-teen?childId=${selectedChild.id}` : `/play?childId=${selectedChild.id}`)
       return
     }

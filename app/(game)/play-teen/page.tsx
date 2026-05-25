@@ -12,7 +12,7 @@ import type { Child } from '@/types/database'
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
-  const gameMode = age >= 13 ? 'teen' : 'kids'
+  const gameMode = (data.gameMode ?? data.game_mode ?? (age >= 13 ? 'teen' : 'kids')) as string
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
@@ -70,7 +70,7 @@ function PlayTeenContent() {
         }
 
         if (!target) { router.push('/play'); return }
-        if ((target.age ?? 0) < 13) { router.push(`/play?childId=${target.id}`); return }
+        if ((target.gameMode ?? target.game_mode) !== 'teen') { router.push(`/play?childId=${target.id}`); return }
 
         setSelectedChild(target)
       } catch (err) {

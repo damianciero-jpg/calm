@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
@@ -103,10 +104,6 @@ function getSessionPlayedAt(session) {
   return value?.toDate ? value.toDate() : new Date(value);
 }
 
-function getSessionChildId(session) {
-  return session.childId ?? session.child_id;
-}
-
 function StatCard({ icon, label, value, sub, color, delay }) {
   return (
     <div style={{
@@ -180,8 +177,9 @@ export default function CalmPathDashboard({
   childAge     = null,
   childAvatar  = "👦",
   childColor   = "#6366F1",
+  childGameMode = null,
 }) {
-  const effectiveGameMode = childAge >= 13 ? "teen" : "kids";
+  const effectiveGameMode = childGameMode ?? (childAge >= 13 ? "teen" : "kids");
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
@@ -207,19 +205,21 @@ export default function CalmPathDashboard({
       setSessionsLoading(true);
 
       try {
-        const snapshot = await withTimeout(
-          getDocs(
-            query(
-              collection(db, "sessions"),
-              where("parentId", "==", parentId)
-            )
-          ),
+        const [childIdSnap, legacyChildIdSnap] = await withTimeout(
+          Promise.all([
+            getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId), where("childId", "==", childId))),
+            getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId), where("child_id", "==", childId))),
+          ]),
           "Dashboard sessions query"
         );
 
-        const rows = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .filter(session => getSessionChildId(session) === childId && getSessionPlayedAt(session) >= weekAgo)
+        const uniqueRows = new Map();
+        [...childIdSnap.docs, ...legacyChildIdSnap.docs].forEach(doc => {
+          uniqueRows.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+
+        const rows = [...uniqueRows.values()]
+          .filter(session => getSessionPlayedAt(session) >= weekAgo)
           .sort((a, b) => getSessionPlayedAt(a).getTime() - getSessionPlayedAt(b).getTime())
           .map(dbRowToSession);
 
@@ -411,13 +411,14 @@ export default function CalmPathDashboard({
                     <a href="/settings" style={{ color: childColor, fontWeight: 600, textDecoration: "none" }}>Switch mode</a>
                   </div>
                 </div>
-                <a
+                <Link
                   href={effectiveGameMode === "teen" ? `/play-teen?childId=${childId}` : `/play?childId=${childId}`}
+                  prefetch
                   data-testid={effectiveGameMode === "teen" ? "daily-checkin-nav" : "moodquest-nav"}
                   style={{ padding: "10px 22px", borderRadius: "12px", background: effectiveGameMode === "teen" ? "#312E81" : childColor, color: "white", fontFamily: "'Outfit', sans-serif", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
                   {effectiveGameMode === "teen" ? "Start Check-in 🌙" : "Play MoodQuest 🎮"}
-                </a>
+                </Link>
               </div>
 
               {/* Stat cards */}

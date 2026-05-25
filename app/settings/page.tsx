@@ -183,7 +183,7 @@ export default function SettingsPage() {
   async function updateGameMode(childId: string, mode: 'kids' | 'teen') {
     setGameModes(prev => ({ ...prev, [childId]: mode }))
     const db = getFirebaseDb()
-    await updateDoc(doc(db, 'children', childId), { gameMode: mode })
+    await updateDoc(doc(db, 'children', childId), { gameMode: mode, game_mode: mode })
   }
 
   async function updateChildPin(childId: string) {

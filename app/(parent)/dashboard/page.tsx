@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type React from 'react'
-import { collection, doc as firestoreDoc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore'
 import { getFirebaseDb } from '@/lib/firebase'
 import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import { SignInRequired } from '@/lib/browser-auth'
@@ -20,7 +20,7 @@ function getAutoGameMode(age: number | null | undefined) {
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
-  const gameMode = getAutoGameMode(age)
+  const gameMode = (data.gameMode ?? data.game_mode ?? getAutoGameMode(age)) as string
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
@@ -34,6 +34,34 @@ function mapChild(id: string, data: Record<string, unknown>): Child {
     game_mode: gameMode,
     createdAt: data.createdAt,
   }
+}
+
+function DashboardSkeleton() {
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');
+        @keyframes shimmer { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+        .dash-skeleton { background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%); background-size: 420px 100%; animation: shimmer 1.2s ease infinite; }
+      `}</style>
+      <div style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: "'Outfit', sans-serif" }}>
+        <div style={{ height: 54, background: 'white', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: 10, padding: '0.5rem 1.5rem' }}>
+          {[0, 1, 2].map(i => <div key={i} className="dash-skeleton" style={{ width: i === 0 ? 120 : 92, height: 28, borderRadius: 20 }} />)}
+        </div>
+        <main style={{ maxWidth: 900, margin: '0 auto', padding: '1.5rem' }}>
+          <div className="dash-skeleton" style={{ height: 96, borderRadius: 18, marginBottom: 18 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }}>
+            {[0, 1, 2, 3].map(i => <div key={i} className="dash-skeleton" style={{ height: 116, borderRadius: 18 }} />)}
+          </div>
+          <div className="dash-skeleton" style={{ height: 260, borderRadius: 18, marginBottom: 18 }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="dash-skeleton" style={{ height: 210, borderRadius: 18 }} />
+            <div className="dash-skeleton" style={{ height: 210, borderRadius: 18 }} />
+          </div>
+        </main>
+      </div>
+    </>
+  )
 }
 
 export default function DashboardPage() {
@@ -67,24 +95,6 @@ export default function DashboardPage() {
             orderBy('createdAt')
           )
         )
-        const correctionWrites = snapshot.docs
-          .map(childDoc => {
-            const data = childDoc.data()
-            const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
-            const expectedMode = getAutoGameMode(age)
-            const currentMode = data.gameMode ?? data.game_mode
-            if (currentMode !== expectedMode) {
-              return updateDoc(firestoreDoc(db, 'children', childDoc.id), {
-                gameMode: expectedMode,
-                game_mode: expectedMode,
-              })
-            }
-            return null
-          })
-          .filter(Boolean)
-
-        await Promise.all(correctionWrites)
-
         const kids = snapshot.docs.map(childDoc => mapChild(childDoc.id, childDoc.data()))
 
         if (active) {
@@ -125,14 +135,7 @@ export default function DashboardPage() {
     setShowAddChild(false)
   }
 
-  if (authLoading || loading) return (
-    <>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Outfit:wght@400;500;600;700&display=swap');`}</style>
-      <div style={{ minHeight: '100vh', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Outfit', sans-serif", padding: '1rem' }}>
-        <div style={{ color: '#64748B', fontSize: '0.95rem' }}>Loading...</div>
-      </div>
-    </>
-  )
+  if (authLoading || loading) return <DashboardSkeleton />
 
   if (!user) {
     return <SignInRequired />
@@ -175,7 +178,7 @@ export default function DashboardPage() {
         {children.map(child => (
           <button
             key={child.id}
-            onClick={() => setSelectedChild({ ...child, gameMode: getAutoGameMode(child.age), game_mode: getAutoGameMode(child.age) })}
+            onClick={() => setSelectedChild(child)}
             style={{
               padding: '6px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
               background: selectedChild.id === child.id ? child.color ?? '#6366F1' : '#F1F5F9',
@@ -189,7 +192,7 @@ export default function DashboardPage() {
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.1 }}>
               <span>{child.name}</span>
               <span style={{ fontSize: '0.58rem', opacity: 0.8, letterSpacing: '0.04em' }}>
-                {getAutoGameMode(child.age) === 'teen' ? 'TEEN MODE' : 'KIDS MODE'}
+                {(child.gameMode ?? child.game_mode) === 'teen' ? 'TEEN MODE' : 'KIDS MODE'}
               </span>
             </span>
           </button>
@@ -226,7 +229,7 @@ export default function DashboardPage() {
         childAge={selectedChild.age ?? 0}
         childAvatar={selectedChild.avatar ?? ''}
         childColor={selectedChild.color ?? '#6366F1'}
-        childGameMode={getAutoGameMode(selectedChild.age)}
+        childGameMode={(selectedChild.gameMode ?? selectedChild.game_mode ?? getAutoGameMode(selectedChild.age)) as string}
       />
 
       {showAddChild && (

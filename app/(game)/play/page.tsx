@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
+import { addDoc, collection, doc as firestoreDoc, getDoc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
 import { SignInRequired } from '@/lib/browser-auth'
 import { CHILD_ID_KEY, isChildModeActive } from '@/lib/child-pin'
 import { getFirebaseDb } from '@/lib/firebase'
@@ -25,7 +25,7 @@ const BUBBLEDROP_MOODS = [
 
 function mapChild(id: string, data: Record<string, unknown>): Child {
   const age = typeof data.age === 'number' ? data.age : Number(data.age ?? 0)
-  const gameMode = age >= 13 ? 'teen' : 'kids'
+  const gameMode = (data.gameMode ?? data.game_mode ?? (age >= 13 ? 'teen' : 'kids')) as string
   const parentId = (data.parentId ?? data.parent_id ?? '') as string
   return {
     id,
@@ -77,6 +77,10 @@ function PlayPageContent() {
         if (childModeId) {
           const match = kids.find(k => k.id === childModeId)
           if (match) {
+            if ((match.gameMode ?? match.game_mode) === 'teen') {
+              window.location.replace(`/play-teen?childId=${match.id}`)
+              return
+            }
             setSelectedChild(match)
             return
           }
@@ -127,7 +131,12 @@ function PlayPageContent() {
   if (authLoading || loading) return <FullPageLoader />
   if (!user || authMissing) return <SignInRequired />
   if (selectedChild && user && selectedGame === 'moodquest') return <MoodQuest childId={selectedChild.id} parentId={user.uid} />
-  if (selectedChild && user && selectedGame === 'teen') return <TeenMode childId={selectedChild.id} parentId={user.uid} />
+  if (selectedChild && user && selectedGame === 'teen') {
+    if ((selectedChild.gameMode ?? selectedChild.game_mode) !== 'teen') {
+      return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
+    }
+    return <TeenMode childId={selectedChild.id} parentId={user.uid} />
+  }
   if (selectedChild && user && selectedGame === 'bubbleDrop') return <BubbleDropScreen child={selectedChild} parentId={user.uid} onBack={() => setSelectedGame(null)} />
   if (selectedChild) return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
   return <ChildSelector childOptions={children} onSelect={child => {
@@ -164,11 +173,13 @@ function calculateBubbleDropStars(score: number) {
 }
 
 function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () => void; onSelect: (choice: GameChoice) => void }) {
-  const games: Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }> = [
+  const childGameMode = child.gameMode ?? child.game_mode ?? 'kids'
+  const games = [
     { id: 'moodquest', title: 'MoodQuest', description: 'Mood-based mini games and stars.', icon: '🎮', color: '#7C3AED' },
     { id: 'bubbleDrop', title: 'BubbleDrop', description: 'Drop, combine, and clear the basket.', icon: '🫧', color: '#0EA5E9' },
     { id: 'teen', title: 'Teen Mode', description: 'Daily check-in with a guided activity.', icon: '🌙', color: '#312E81' },
-  ]
+  ] satisfies Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }>
+  const visibleGames = games.filter(game => childGameMode === 'teen' || game.id !== 'teen')
 
   return (
     <>
@@ -191,7 +202,7 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '14px' }}>
-            {games.map(game => (
+            {visibleGames.map(game => (
               <button key={game.id} type="button" className="game-option" onClick={() => onSelect(game.id)} style={{ minHeight: '180px', background: 'white', border: `3px solid ${game.color}33`, borderRadius: '18px', padding: '20px 16px', cursor: 'pointer', transition: 'transform 0.2s ease, box-shadow 0.2s ease', boxShadow: `0 6px 18px ${game.color}18`, textAlign: 'left', fontFamily: "'Nunito',sans-serif" }}>
                 <div style={{ width: '54px', height: '54px', borderRadius: '16px', background: `${game.color}16`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', marginBottom: '18px' }}>
                   {game.icon}
@@ -213,7 +224,26 @@ function BubbleDropScreen({ child, parentId, onBack }: { child: Child; parentId:
   const [score, setScore] = useState(0)
   const [gameEnded, setGameEnded] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  const [highScore, setHighScore] = useState(0)
   const saveStartedRef = useRef(false)
+
+  useEffect(() => {
+    let active = true
+
+    async function loadHighScore() {
+      try {
+        const snap = await getDoc(firestoreDoc(getFirebaseDb(), 'children', child.id))
+        const data = snap.data()
+        const best = Number(data?.bubbleDropHighScore ?? data?.bubble_drop_high_score ?? 0)
+        if (active) setHighScore(Number.isFinite(best) ? best : 0)
+      } catch (err) {
+        console.error('BubbleDrop high score load failed:', err)
+      }
+    }
+
+    loadHighScore()
+    return () => { active = false }
+  }, [child.id])
 
   const exitBubbleDrop = useCallback(() => {
     if (!gameEnded && score > 0 && !window.confirm("Are you sure? Your score won't be saved")) {
@@ -237,6 +267,13 @@ function BubbleDropScreen({ child, parentId, onBack }: { child: Child; parentId:
     const db = getFirebaseDb()
 
     try {
+      console.log('BubbleDrop Firestore session write called', {
+        parentId,
+        childId: child.id,
+        child_id: child.id,
+        score: finalScore,
+        mood: selectedMood,
+      })
       await addDoc(collection(db, 'sessions'), {
         parentId,
         childId: child.id,
@@ -250,12 +287,20 @@ function BubbleDropScreen({ child, parentId, onBack }: { child: Child; parentId:
         played_at: serverTimestamp(),
         createdAt: serverTimestamp(),
       })
+      if (finalScore > highScore) {
+        await setDoc(firestoreDoc(db, 'children', child.id), {
+          parentId,
+          bubbleDropHighScore: finalScore,
+          bubble_drop_high_score: finalScore,
+        }, { merge: true })
+        setHighScore(finalScore)
+      }
       setSaveStatus('Saved! ⭐')
     } catch (err) {
       console.error('BubbleDrop session insert failed:', err)
       setSaveStatus('Save failed')
     }
-  }, [child.id, parentId, selectedMood])
+  }, [child.id, parentId, selectedMood, highScore])
 
   const handleScoreChange = useCallback((nextScore: number) => {
     setScore(nextScore)
@@ -306,7 +351,7 @@ function BubbleDropScreen({ child, parentId, onBack }: { child: Child; parentId:
           </div>
           <div style={{ width: '42px' }} />
         </div>
-        <SensoryMergeGame theme={theme} onScoreChange={handleScoreChange} onGameOver={handleGameOver} gameOverStatus={saveStatus} onGoHome={goHome} />
+        <SensoryMergeGame childId={child.id} theme={theme} onScoreChange={handleScoreChange} onGameOver={handleGameOver} gameOverStatus={saveStatus} highScore={highScore} onGoHome={goHome} />
       </div>
     </>
   )
