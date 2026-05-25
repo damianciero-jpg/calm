@@ -316,11 +316,18 @@ export default function SensoryMergeGame({
           });
 
           const stripes = this.add.graphics().setDepth(2);
-          for (let x = -HEIGHT; x < WIDTH + HEIGHT; x += 48) {
-            stripes.fillStyle(0xF43F5E, 0.82);
-            stripes.fillRect(x, 100, 18, HEIGHT + 80);
-            stripes.rotation = -0.35;
-          }
+          const sideWalls = [wallDefs[0], wallDefs[1]];
+          stripes.fillStyle(0xF43F5E, 0.3);
+          sideWalls.forEach((wall) => {
+            const left = wall.x - wall.w / 2 + 4;
+            const right = wall.x + wall.w / 2 - 4;
+            const top = wall.y - wall.h / 2 + 8;
+            const bottom = wall.y + wall.h / 2 - 8;
+            for (let y = top; y < bottom; y += 44) {
+              stripes.fillTriangle(left, y + 28, left, y + 46, right, y + 12);
+              stripes.fillTriangle(right, y + 12, right, y + 30, left, y + 46);
+            }
+          });
 
           this.add.rectangle(WIDTH / 2, HEIGHT - 46, WIDTH - 44, 16, 0xffffff, 0.65).setDepth(3);
         }
@@ -611,14 +618,15 @@ export default function SensoryMergeGame({
     <div
       ref={scaleRootRef}
       style={{
-        width: '100%',
-        maxWidth: WIDTH,
+        width: 'min(100vw, 450px)',
+        maxWidth: '100vw',
         height: TOTAL_HEIGHT * visualScale,
         margin: '0 auto',
         overflow: 'hidden',
         display: 'flex',
         justifyContent: 'center',
         fontFamily: "'Outfit', system-ui, sans-serif",
+        boxSizing: 'border-box',
       }}
     >
       <div
