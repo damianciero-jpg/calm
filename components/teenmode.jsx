@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from "react";
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, increment, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 
 // Maps teen mood IDs → DB Mood enum values
@@ -233,9 +233,9 @@ export default function TeenMode({ childId, parentId }) {
   useEffect(() => {
     if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId)))
-      .then((snapshot) => setSessionCount(snapshot.docs.filter(doc => doc.data().childId === childId).length))
-      .catch((err) => console.error("Teen sessions query failed:", err));
+    getDoc(doc(db, "children", childId))
+      .then((snap) => setSessionCount(Number(snap.data()?.sessionCount) || 0))
+      .catch((err) => console.error("Child sessionCount query failed:", err));
   }, [childId, parentId]);
 
   const mood     = selectedMood ? MOODS.find(m => m.id === selectedMood) : null;
@@ -285,6 +285,16 @@ export default function TeenMode({ childId, parentId }) {
         });
         setSessionSaveStatus("Session saved");
         setSessionCount(n => n + 1);
+
+        try {
+          await updateDoc(doc(db, "children", childId), {
+            totalStars: increment(3),
+            sessionCount: increment(1),
+          });
+        } catch (err) {
+          console.error("Child counter update failed:", err);
+        }
+
         setScreen("done");
         window.setTimeout(() => {
           window.location.replace("/dashboard");

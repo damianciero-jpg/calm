@@ -126,7 +126,7 @@ test.describe('authenticated routes', () => {
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible()
 
     await page.getByRole('link', { name: /home/i }).click({ force: true })
-    await expect(page).toHaveURL(/\/dashboard|\/patients/)
+    await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.getByRole('link', { name: /sign in/i })).toHaveCount(0)
   })
 

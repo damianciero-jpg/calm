@@ -103,13 +103,11 @@ export default function AddChildModal({ onSuccess, onCancel }: Props) {
       const childPinHash = await hashChildPin(pin, user.uid)
       const child = {
         parentId: user.uid,
-        parent_id: user.uid,
         name: name.trim(),
         age: parsedAge,
         avatar: selected.emoji,
         color: selected.color,
         gameMode,
-        game_mode: gameMode,
         childPinHash,
         child_pin_hash: childPinHash,
         createdAt: serverTimestamp(),

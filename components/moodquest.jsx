@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from "react";
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, increment, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase";
 
 const MOODS = [
@@ -354,14 +354,11 @@ export default function MoodQuest({ childId, parentId }) {
   useEffect(() => {
     if (!childId || !parentId) return;
     const db = getFirebaseDb();
-    getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId)))
-      .then((snapshot) => {
-        setTotalStars(snapshot.docs.reduce((a, doc) => {
-          const data = doc.data();
-          return data.childId === childId ? a + (Number(data.stars) || 0) : a;
-        }, 0));
+    getDoc(doc(db, "children", childId))
+      .then((snap) => {
+        setTotalStars(Number(snap.data()?.totalStars) || 0);
       })
-      .catch((err) => console.error("Session stars query failed:", err));
+      .catch((err) => console.error("Child totalStars query failed:", err));
   }, [childId, parentId]);
 
   const mood = selectedMood ? MOODS.find((m) => m.id === selectedMood) : null;
@@ -410,6 +407,16 @@ export default function MoodQuest({ childId, parentId }) {
           createdAt: serverTimestamp(),
         });
         setSessionSaveStatus("Session saved");
+
+        try {
+          await updateDoc(doc(db, "children", childId), {
+            totalStars: increment(stars),
+            sessionCount: increment(1),
+          });
+        } catch (err) {
+          console.error("Child counter update failed:", err);
+        }
+
         window.setTimeout(() => {
           window.location.replace("/dashboard");
         }, 700);

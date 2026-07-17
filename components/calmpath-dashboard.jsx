@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { getFirebaseDb } from "@/lib/firebase";
+import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
+import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const MOOD_META = {
@@ -99,6 +99,17 @@ function dbRowToSession(s) {
   };
 }
 
+function getDashboardErrorMessage(err) {
+  const code = typeof err === "object" && err && "code" in err ? String(err.code) : "";
+  const message = err instanceof Error ? err.message : "";
+
+  if (code === "failed-precondition" && message.toLowerCase().includes("index")) {
+    return "Session history is still being prepared. Firebase is building the required index. Try again in a few minutes.";
+  }
+
+  return "Sessions could not load";
+}
+
 function getSessionPlayedAt(session) {
   const value = session.playedAt ?? session.played_at ?? session.createdAt ?? session.created_at ?? Date.now();
   return value?.toDate ? value.toDate() : new Date(value);
@@ -183,6 +194,7 @@ export default function CalmPathDashboard({
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState(null);
   const [aiInsights, setAiInsights] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -203,29 +215,26 @@ export default function CalmPathDashboard({
 
     async function loadSessions() {
       setSessionsLoading(true);
+      setSessionsError(null);
 
       try {
-        const [childIdSnap, legacyChildIdSnap] = await withTimeout(
-          Promise.all([
-            getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId), where("childId", "==", childId))),
-            getDocs(query(collection(db, "sessions"), where("parentId", "==", parentId), where("child_id", "==", childId))),
-          ]),
+        const snapshot = await withTimeout(
+          getDocs(query(
+            collection(db, "sessions"),
+            where("parentId", "==", parentId),
+            where("childId", "==", childId),
+            where("playedAt", ">=", weekAgo),
+            orderBy("playedAt", "asc")
+          )),
           "Dashboard sessions query"
         );
 
-        const uniqueRows = new Map();
-        [...childIdSnap.docs, ...legacyChildIdSnap.docs].forEach(doc => {
-          uniqueRows.set(doc.id, { id: doc.id, ...doc.data() });
-        });
-
-        const rows = [...uniqueRows.values()]
-          .filter(session => getSessionPlayedAt(session) >= weekAgo)
-          .sort((a, b) => getSessionPlayedAt(a).getTime() - getSessionPlayedAt(b).getTime())
-          .map(dbRowToSession);
+        const rows = snapshot.docs.map(doc => dbRowToSession({ id: doc.id, ...doc.data() }));
 
         if (active) setSessions(rows);
       } catch (err) {
         console.error("Dashboard sessions query failed", err);
+        if (active) setSessionsError(getDashboardErrorMessage(err));
       } finally {
         if (active) setSessionsLoading(false);
       }
@@ -256,11 +265,25 @@ export default function CalmPathDashboard({
     setAiLoading(true);
     setAiError(null);
     try {
+      const currentUser = getFirebaseAuth().currentUser;
+      const idToken = await currentUser?.getIdToken();
+      if (!idToken) {
+        setAiError("Couldn't load insights right now. Try again shortly.");
+        return;
+      }
+
       const res = await fetch("/api/ai-insights", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ sessions, mode: "parent" }),
       });
+      if (res.status === 401) {
+        setAiError("Couldn't load insights right now. Try again shortly.");
+        return;
+      }
       const { data, error } = await res.json();
       if (error) throw new Error(error);
       setAiInsights(data);
@@ -390,6 +413,11 @@ export default function CalmPathDashboard({
 
         {/* CONTENT */}
         <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem" }}>
+          {sessionsError && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "14px", padding: "12px 16px", color: "#DC2626", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
+              {sessionsError}
+            </div>
+          )}
           {/* ── OVERVIEW TAB ── */}
           {tab === "overview" && (
             <div style={{ animation: "fadeUp 0.4s ease" }}>

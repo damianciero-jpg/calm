@@ -148,7 +148,7 @@ export default function SignupPage() {
       setStatus('Opening dashboard...')
       router.refresh()
       navigationStarted = true
-      window.location.assign(role === 'therapist' ? '/patients' : '/dashboard')
+      window.location.assign('/dashboard')
     } catch (err) {
       console.error('Signup failed', err)
       setError(getAuthErrorMessage(err))

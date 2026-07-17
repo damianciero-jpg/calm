@@ -80,7 +80,7 @@ function BottomNavContent() {
 
   if (AUTH_PATHS.has(pathname) || authLoading || !role) return null
 
-  const homeHref = role === 'therapist' ? '/patients' : '/dashboard'
+  const homeHref = '/dashboard'
   const playHref = urlChildId && pathname === '/play-teen' ? `/play-teen?childId=${urlChildId}` : urlChildId ? `/play?childId=${urlChildId}` : firstChildHref ?? '/play'
 
   const tabs: NavTab[] = [
@@ -91,7 +91,7 @@ function BottomNavContent() {
   ]
 
   function isActive(tab: NavTab) {
-    if (tab.id === 'home')     return pathname === '/dashboard' || pathname === '/patients'
+    if (tab.id === 'home')     return pathname === '/dashboard'
     if (tab.id === 'play')     return pathname.startsWith('/play')
     if (tab.id === 'alerts')   return pathname === '/notifications'
     if (tab.id === 'settings') return pathname === '/settings'

@@ -31,11 +31,23 @@ function initAdmin(): admin.app.App {
   });
 }
 
-// Module-level singleton — safe in both Edge and Node.js runtimes.
-const adminApp = initAdmin();
+let cachedApp: admin.app.App | null = null;
 
-export const adminAuth = admin.auth(adminApp);
-export const adminFirestore = admin.firestore(adminApp);
-export const adminStorage = admin.storage(adminApp);
+function getAdminApp(): admin.app.App {
+  if (!cachedApp) {
+    cachedApp = initAdmin();
+  }
+  return cachedApp;
+}
 
-export default adminApp;
+export function getAdminAuth(): admin.auth.Auth {
+  return admin.auth(getAdminApp());
+}
+
+export function getAdminFirestore(): admin.firestore.Firestore {
+  return admin.firestore(getAdminApp());
+}
+
+export function getAdminStorage(): admin.storage.Storage {
+  return admin.storage(getAdminApp());
+}

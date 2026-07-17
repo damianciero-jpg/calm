@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { getAdminAuth } from '@/lib/firebase-admin'
 
 export const maxDuration = 30
 
@@ -7,14 +8,65 @@ const anthropic = new Anthropic()
 
 type Session = { date: string; time: string; mood: string; stars: number; game?: string }
 
+const MAX_SESSIONS = 200
+const MAX_BODY_BYTES = 100 * 1024
+
+// Best-effort, per-serverless-instance rate limit. Resets whenever the
+// instance is recycled and does not coordinate across instances.
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000
+const requestLog = new Map<string, number[]>()
+
+function isRateLimited(uid: string): boolean {
+  const now = Date.now()
+  const timestamps = (requestLog.get(uid) ?? []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+
+  if (timestamps.length >= RATE_LIMIT_MAX) {
+    requestLog.set(uid, timestamps)
+    return true
+  }
+
+  timestamps.push(now)
+  requestLog.set(uid, timestamps)
+  return false
+}
+
 export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get('authorization') ?? ''
+  const match = authHeader.match(/^Bearer (.+)$/)
+  if (!match) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  let uid: string
   try {
-    const { sessions, childName, childAge, iepGoals, mode } = await request.json() as {
+    const decoded = await getAdminAuth().verifyIdToken(match[1])
+    uid = decoded.uid
+  } catch (err) {
+    console.error('ai-insights auth verification failed:', err)
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (isRateLimited(uid)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
+  const rawBody = await request.text()
+  if (rawBody.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 400 })
+  }
+
+  try {
+    const { sessions, childName, childAge, iepGoals, mode } = JSON.parse(rawBody) as {
       sessions: Session[]
       childName?: string
       childAge?: number
       iepGoals?: string[]
       mode: 'parent' | 'therapist'
+    }
+
+    if (!Array.isArray(sessions) || sessions.length > MAX_SESSIONS) {
+      return NextResponse.json({ error: 'Invalid sessions payload' }, { status: 400 })
     }
 
     let prompt: string

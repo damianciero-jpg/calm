@@ -10,9 +10,10 @@ import { useFirebaseUser } from '@/lib/useFirebaseUser'
 import SensoryMergeGame from '@/components/SensoryMergeGame'
 import MoodQuest from '@/components/moodquest.jsx'
 import TeenMode from '@/components/teenmode'
+import FroggerGame from '@/components/FroggerGame'
 import type { Child } from '@/types/database'
 
-type GameChoice = 'moodquest' | 'bubbleDrop' | 'teen'
+type GameChoice = 'moodquest' | 'bubbleDrop' | 'teen' | 'frogger'
 
 const BUBBLEDROP_MOODS = [
   { id: 'happy', label: 'Happy', emoji: '😄', color: '#F59E0B' },
@@ -138,6 +139,7 @@ function PlayPageContent() {
     return <TeenMode childId={selectedChild.id} parentId={user.uid} />
   }
   if (selectedChild && user && selectedGame === 'bubbleDrop') return <BubbleDropScreen child={selectedChild} parentId={user.uid} onBack={() => setSelectedGame(null)} />
+  if (selectedChild && selectedGame === 'frogger') return <FroggerGame onBack={() => setSelectedGame(null)} />
   if (selectedChild) return <GameSelector child={selectedChild} onBack={() => setSelectedChild(null)} onSelect={setSelectedGame} />
   return <ChildSelector childOptions={children} onSelect={child => {
     setSelectedGame(null)
@@ -177,9 +179,12 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
   const games = [
     { id: 'moodquest', title: 'MoodQuest', description: 'Mood-based mini games and stars.', icon: '🎮', color: '#7C3AED' },
     { id: 'bubbleDrop', title: 'BubbleDrop', description: 'Drop, combine, and clear the basket.', icon: '🫧', color: '#0EA5E9' },
+    { id: 'frogger', title: 'Frogger', description: 'Cross the road and river to reach home.', icon: '🐸', color: '#16A34A' },
     { id: 'teen', title: 'Teen Mode', description: 'Daily check-in with a guided activity.', icon: '🌙', color: '#312E81' },
   ] satisfies Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }>
-  const visibleGames = games.filter(game => childGameMode === 'teen' || game.id !== 'teen')
+  const visibleGames = games.filter(game =>
+    childGameMode === 'teen' ? game.id === 'teen' || game.id === 'bubbleDrop' : game.id === 'moodquest' || game.id === 'bubbleDrop'
+  )
 
   return (
     <>
@@ -195,7 +200,7 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
           </button>
 
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '0.35rem' }}>{child.avatar ?? '🎮'}</div>
+            <div style={{ fontSize: '3rem', marginBottom: '0.35rem' }}>{child.avatar || '🎮'}</div>
             <h1 style={{ fontFamily: "'Baloo 2',cursive", fontSize: '2rem', fontWeight: 800, color: '#333', margin: 0 }}>
               Choose a game for {child.name}
             </h1>
@@ -425,7 +430,7 @@ function ChildSelector({ childOptions, onSelect }: { childOptions: Child[]; onSe
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: '2.2rem',
                   }}>
-                    {child.avatar ?? ''}
+                    {child.avatar || '🎮'}
                   </div>
                   <div style={{ fontFamily: "'Baloo 2',cursive", fontSize: '1.1rem', fontWeight: 800, color: '#333' }}>
                     {child.name}
