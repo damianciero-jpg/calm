@@ -183,7 +183,9 @@ function GameSelector({ child, onBack, onSelect }: { child: Child; onBack: () =>
     { id: 'teen', title: 'Teen Mode', description: 'Daily check-in with a guided activity.', icon: '🌙', color: '#312E81' },
   ] satisfies Array<{ id: GameChoice; title: string; description: string; icon: string; color: string }>
   const visibleGames = games.filter(game =>
-    childGameMode === 'teen' ? game.id === 'teen' || game.id === 'bubbleDrop' : game.id === 'moodquest' || game.id === 'bubbleDrop'
+    childGameMode === 'teen'
+      ? game.id === 'teen' || game.id === 'bubbleDrop' || game.id === 'frogger'
+      : game.id === 'moodquest' || game.id === 'bubbleDrop' || game.id === 'frogger'
   )
 
   return (
