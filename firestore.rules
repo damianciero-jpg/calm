@@ -20,6 +20,15 @@ service cloud.firestore {
         && request.resource.data.parentId == request.auth.uid;
     }
 
+    // unlockGates/{childId}/gates/{gateId} and routines/{childId}/items/{routineId}
+    // are keyed by childId as a path segment rather than storing parentId on the
+    // document itself, so ownership is resolved by looking up the linked child.
+    function isLinkedChild(childId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/children/$(childId))
+        && get(/databases/$(database)/documents/children/$(childId)).data.parentId == request.auth.uid;
+    }
+
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
@@ -28,6 +37,18 @@ service cloud.firestore {
       allow create: if createsOwnerByParentId();
       allow read, delete: if isOwnerByParentId();
       allow update: if updatesOwnerByParentId();
+    }
+
+    match /unlockGates/{childId}/gates/{gateId} {
+      allow read, delete: if isLinkedChild(childId);
+      allow create, update: if isLinkedChild(childId)
+        && request.resource.data.childId == childId;
+    }
+
+    match /routines/{childId}/items/{routineId} {
+      allow read, delete: if isLinkedChild(childId);
+      allow create, update: if isLinkedChild(childId)
+        && request.resource.data.childId == childId;
     }
 
     match /sessions/{sessionId} {
