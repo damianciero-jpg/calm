@@ -1,0 +1,23 @@
+.visualizer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 16px;
+}
+.upcoming {
+  width: 100%;
+  max-width: 320px;
+}
+.completed {
+  width: 100%;
+  max-width: 320px;
+  opacity: 0.5;
+}
+.completedRow {
+  font-size: 13px;
+  padding: 4px 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .visualizer * { transition: none !important; }
+}
