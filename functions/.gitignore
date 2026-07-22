@@ -1,0 +1,10 @@
+# Compiled JS
+lib/
+
+# Dependencies
+node_modules/
+
+# Emulator/debug files
+.runtimeconfig.json
+firebase-debug.log
+firebase-debug.*.log
